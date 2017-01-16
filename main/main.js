@@ -15,7 +15,7 @@ module.exports.loop = function () {
     creepHandler.run(creep)
   })
 
-  if (creepCount < 5) {
+  if (creepCount < 3) {
     creepHandler.spawn()
   }
 }

@@ -27,8 +27,8 @@ let roleBuild = {
       let res = 0
 
       switch (creep.memory.lastfind) {
-        case 'repair': { res = creep.repair(obj); break }
         case 'construction': { res = creep.build(obj); break }
+        case 'repair': { res = creep.repair(obj); if (obj.hits > obj.hitsMax * 0.95) { res = -1 } else { break } }
         default: { res = -1 }
       }
 
@@ -37,7 +37,6 @@ let roleBuild = {
         case ERR_NOT_IN_RANGE: { helper.move(creep); break }
         default: { this.clear(creep) }
       }
-
     } else {
       helper.move(creep)
     }
