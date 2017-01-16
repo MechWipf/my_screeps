@@ -1,12 +1,17 @@
 module.exports = {
   run: function (handler, creep) {
-    if (creep.carry.energy == 0) {
-      handler.nextTask(creep, 'h')
+    if (creep.c.carry.energy == 0) {
+      handler.nextTask(creep.c, 'h')
       return
     }
 
-    if (creep.upgradeController(creep.room.controller) == ERR_NOT_IN_RANGE) {
-      creep.moveTo(creep.room.controller);
-    }
+    let target = creep.getTarget()
+
+    if (target && creep.getTask() == 'u') {
+      if (creep.c.upgradeController(target) == ERR_NOT_IN_RANGE) {
+        creep.move()
+      }
+    } else
+      creep.setTarget(creep.c.room.controller, null, 'u');
   }
 }

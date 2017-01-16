@@ -4,48 +4,49 @@ let roleBuild = {
   run: function (handler, creep) {
     this.handler = handler
 
-    if (creep.carry.energy == 0) {
-      this.clear(creep, 'h')
+    if (creep.c.carry.energy == 0) {
+      handler.nextTask(creep.c, 'h')
       return
     }
 
-    if (creep.memory.object == null) {
-      helper.getTarget(creep, 'repair')
+    if (_.intersection([creep.getTask()], ['repair', 'construction']).length == 0) {
+      creep.clearTarget()
     }
 
-    if (creep.memory.object == null) {
-      helper.getTarget(creep, 'construction')
+    if (!creep.getTarget()) {
+      let o = helper.getTarget(creep.c, 'repair')
+      if (o) creep.setTarget(o.target, o.path, 'repair');
     }
 
-    if (creep.memory.object == null) {
-      this.clear(creep)
+    if (!creep.getTarget()) {
+      let o = helper.getTarget(creep.c, 'construction')
+      if (o) creep.setTarget(o.target, o.path, 'construction');
+    }
+
+    if (!creep.getTarget()) {
+      creep.clearTarget()
+      handler.nextTask(creep.c)
       return
     }
 
-    if (creep.memory.range < 3) {
-      let obj = Game.getObjectById(creep.memory.object)
+    if (creep.getRange() < 3) {
+      let obj = creep.getTarget()
       let res = 0
 
-      switch (creep.memory.lastfind) {
-        case 'construction': { res = creep.build(obj); break }
-        case 'repair': { res = creep.repair(obj); if (obj.hits > obj.hitsMax * 0.95) { res = -1 } else { break } }
+      switch (creep.getTask()) {
+        case 'construction': { res = creep.c.build(obj); break }
+        case 'repair': { res = creep.c.repair(obj); if (obj.hits == obj.hitsMax) { res = -1 } else { break } }
         default: { res = -1 }
       }
 
       switch (res) {
         case 0: { break }
-        case ERR_NOT_IN_RANGE: { helper.move(creep); break }
-        default: { this.clear(creep) }
+        case ERR_NOT_IN_RANGE: { creep.move(); break }
+        default: { creep.clearTarget(), handler.nextTask(creep.c) }
       }
     } else {
-      helper.move(creep)
+      creep.move()
     }
-  },
-
-  clear: function (creep, task) {
-    delete creep.memory.path
-    delete creep.memory.object
-    this.handler.nextTask(creep, task)
   }
 }
 
