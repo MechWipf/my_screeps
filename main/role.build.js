@@ -10,26 +10,34 @@ let roleBuild = {
     }
 
     if (creep.memory.object == null) {
-      if (helper.getTarget(creep, 'construction') === false) {
-        this.clear(creep)
-        return
-      }
+      helper.getTarget(creep, 'repair')
+    }
+
+    if (creep.memory.object == null) {
+      helper.getTarget(creep, 'construction')
+    }
+
+    if (creep.memory.object == null) {
+      this.clear(creep)
+      return
     }
 
     if (creep.memory.range < 3) {
       let obj = Game.getObjectById(creep.memory.object)
-      switch (creep.build(obj)) {
-        case 0: {
-          break
-        }
-        case ERR_NOT_IN_RANGE: {
-          helper.move(creep)
-          break
-        }
-        default: {
-          this.clear(creep)
-        }
+      let res = 0
+
+      switch (creep.memory.lastfind) {
+        case 'repair': { res = creep.repair(obj); break }
+        case 'construction': { res = creep.build(obj); break }
+        default: { res = -1 }
       }
+
+      switch (res) {
+        case 0: { break }
+        case ERR_NOT_IN_RANGE: { helper.move(creep); break }
+        default: { this.clear(creep) }
+      }
+
     } else {
       helper.move(creep)
     }

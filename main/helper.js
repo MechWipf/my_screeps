@@ -65,9 +65,15 @@ module.exports = {
       case 'repair': {
         object = creep.pos.findClosestByRange(FIND_STRUCTURES, {
           filter: function (object) {
-            if (((object.structureType === STRUCTURE_ROAD || object.structureType === STRUCTURE_STORAGE || object.structureType === STRUCTURE_CONTAINER) && object.hits < object.hitsMax * 0.95) || (object.structureType === STRUCTURE_WALL || object.structureType === STRUCTURE_RAMPART) && object.hits < 500000) {
+            if ((object.structureType === STRUCTURE_ROAD || object.structureType === STRUCTURE_STORAGE || object.structureType === STRUCTURE_CONTAINER) && object.hits < object.hitsMax * 0.95) {
+              console.log('found', object.structureType)
+              return true
+            }
+            if ((object.structureType === STRUCTURE_WALL || object.structureType === STRUCTURE_RAMPART) && object.hits < 500000) {
+              console.log('found', object.structureType)
               return true;
             }
+            
             return false;
           }
         });

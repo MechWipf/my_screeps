@@ -37,9 +37,11 @@ let creepHandler = {
   },
 
   spawn: function () {
+
+
     for (let i in Game.spawns) {
       let spawn = Game.spawns[i]
-      spawn.createCreep([WORK, CARRY, MOVE, MOVE], null, { t: '-', r: ['h', 'c', 'b', 'u'] })
+      spawn.createCreep([WORK, CARRY, MOVE, MOVE], null, { type: '', t: '-', r: ['h', 'c', 'b', 'u'] })
       break
     }
   },
@@ -70,6 +72,10 @@ let creepHandler = {
 
     creep.say(newTask)
     creep.memory.t = newTask
+  },
+
+  getRessource: function (creep, ressource) {
+    ressource = ressource || 'energy'
   }
 }
 
