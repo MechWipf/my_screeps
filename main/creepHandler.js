@@ -143,6 +143,7 @@ let creepHandler = {
     if ((this.time[room.id] || 0) < Game.time) {
       let slength = 1e999
       let resList = []
+      let prio = false
 
       _.forEach(room.find(FIND_DROPPED_RESOURCES), (res) => {
         resList.push(res)
@@ -154,6 +155,7 @@ let creepHandler = {
             slength = path.length
             obj.target = res
             obj.path = path
+            prio = true
           }
         }
       })
@@ -161,12 +163,14 @@ let creepHandler = {
       _.forEach(room.find(FIND_SOURCES), (res) => {
         resList.push(res)
 
-        let path = getPath(room, creep.pos, res.pos)
+        if (!prio) {
+          let path = getPath(room, creep.pos, res.pos)
 
-        if (path.length && path.length < slength) {
-          slength = path.length
-          obj.target = res
-          obj.path = path
+          if (path.length && path.length < slength) {
+            slength = path.length
+            obj.target = res
+            obj.path = path
+          }
         }
       })
 
