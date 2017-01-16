@@ -13,10 +13,10 @@ gulp.task('deploy-dev', [], function () {
 })
 
 gulp.task('watch-dev', ['deploy-dev'], function () {
-  let watcher = gulp.watch('main/**', 'deploy-dev')
+  let watcher = gulp.watch('main/**', ['deploy-dev'])
   watcher.on('changed', function (event) {
     console.log('File ' + event.path + ' was ' + event.type)
   })
 })
 
-glup.task('default', ['watch-dev'])
+gulp.task('default', ['watch-dev'])
