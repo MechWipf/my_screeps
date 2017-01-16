@@ -6,7 +6,6 @@ let roleBuild = {
 
     if (creep.carry.energy == 0) {
       this.clear(creep, 'h')
-      creep.say('\u2615', true)
       return
     }
 
