@@ -66,14 +66,43 @@ let creepHandler = {
       spawn = Game.spawns[i]
       break
     }
+    
+    let cost = 0
+    let maxCost = spawn.room.energyAvailable
 
     switch (spawnType) {
       case 'miner': {
-        spawn.createCreep([WORK, WORK, CARRY, MOVE], null, { type: 'miner', t: '-', r: ['h'] })
+        let pattern = [WORK, WORK, CARRY, MOVE]
+        let workCount = 2
+        cost = 300
+
+        while (cost + 50 <= maxCost) {
+          let diff = maxCost - cost
+
+          if (diff >= 100 && workCount < 5) {
+            pattern.push(WORK)
+            cost += 100
+            workCount++
+          } else if (diff >= 50) {
+            pattern.push(CARRY)
+            cost += 50
+          }
+
+        }
+
+        spawn.createCreep(pattern, null, { type: 'miner', t: '-', r: ['h'] })
         break
       }
       default: {
-        spawn.createCreep([WORK, CARRY, MOVE, MOVE], null, { type: '', t: '-', r: ['h', 'c', 'b', 'u'] })
+        let pattern = [WORK, CARRY, MOVE, MOVE]
+        cost = 250
+        
+        while (cost + 100 <= maxCost) {
+          cost += 100
+          pattern.push(CARRY, MOVE)
+        }
+        
+        spawn.createCreep(pattern, null, { type: '', t: '-', r: ['h', 'c', 'b', 'u'] })
         break
       }
     }
