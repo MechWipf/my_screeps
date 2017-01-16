@@ -55,7 +55,7 @@ let creepHandler = {
       try {
         this.roles[k.substr(0, 1)] = require('role.' + k)
       } catch (err) {
-        console.log('Failed to load role "' + k + '"')
+        console.log('Failed to load role "' + k + '":', err)
       }
     })
   },
@@ -66,7 +66,7 @@ let creepHandler = {
       spawn = Game.spawns[i]
       break
     }
-    
+
     let cost = 0
     let maxCost = spawn.room.energyAvailable
 
@@ -96,12 +96,12 @@ let creepHandler = {
       default: {
         let pattern = [WORK, CARRY, MOVE, MOVE]
         cost = 250
-        
+
         while (cost + 100 <= maxCost) {
           cost += 100
           pattern.push(CARRY, MOVE)
         }
-        
+
         spawn.createCreep(pattern, null, { type: '', t: '-', r: ['h', 'c', 'b', 'u'] })
         break
       }

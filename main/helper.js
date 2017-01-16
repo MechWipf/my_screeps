@@ -56,9 +56,6 @@ let helper = {
             if ((object.structureType === STRUCTURE_ROAD || object.structureType === STRUCTURE_STORAGE || object.structureType === STRUCTURE_CONTAINER) && object.hits < object.hitsMax * 0.95) {
               return true
             }
-            if ((object.structureType === STRUCTURE_WALL || object.structureType === STRUCTURE_RAMPART) && object.hits < 500000) {
-              return true;
-            }
 
             return false;
           }
