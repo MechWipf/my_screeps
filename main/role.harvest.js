@@ -25,6 +25,7 @@ module.exports = {
             creep.setTask(H_TASK_MOVE)
             creep.pushTask(H_TASK_HAUL)
             creep.say('\u26aa')
+            res.target.claim(creep)
             break
           }
         }
@@ -73,7 +74,7 @@ module.exports = {
         }
 
         if (creep.harvest(target) != OK) {
-          creep.setTask('h_search')
+          creep.setTask(H_TASK_SEARCH)
         }
         break
       }
@@ -88,7 +89,11 @@ module.exports = {
             r = creep.pickup(target)
           }
 
-          if (r != OK) { creep.setTask('h_search') }
+          if (target) {
+            target.rewokeClaim(creep)
+          }
+
+          if (r != OK) { creep.setTask(H_TASK_SEARCH) }
         }
         break
       }

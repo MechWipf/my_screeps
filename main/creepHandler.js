@@ -94,11 +94,11 @@ let creepHandler = {
     switch (spawnType) {
       case 'miner': {
         pattern = [WORK, WORK, CARRY, MOVE]
-        memory = { type: 'miner', t:'-', r: ['h'] }
+        memory = { type: 'miner', t: '-', r: ['h'] }
         cost = 300
 
         let work = 2
-        
+
         while (cost + 50 <= maxCost) {
           let diff = maxCost - cost
 
@@ -140,7 +140,7 @@ let creepHandler = {
     }
 
     spawn.createCreep(pattern, null, memory)
-    
+
     spawn.room.memory.spawnTimer = Game.time + cost
   },
 
@@ -186,13 +186,15 @@ let creepHandler = {
       _.forEach(room.find(FIND_DROPPED_RESOURCES), (res) => {
         resList.push(res.id)
 
-        let path = creep.findPathTo(res.pos)
+        if (res.canClaim(creep)) {
+          let path = creep.findPathTo(res.pos)
 
-        if (path.length && path.length < slength) {
-          slength = path.length
-          obj.target = res
-          obj.path = path
-          prio = true
+          if (path.length && path.length < slength) {
+            slength = path.length
+            obj.target = res
+            obj.path = path
+            prio = true
+          }
         }
       })
 
@@ -202,11 +204,15 @@ let creepHandler = {
 
         let path = creep.findPathTo(res.pos)
 
-        if (path.length && path.length < slength) {
-          slength = path.length
-          obj.target = res
-          obj.path = path
-          prio = true
+        if (res.canClaim(creep)) {
+          let path = creep.findPathTo(res.pos)
+
+          if (path.length && path.length < slength) {
+            slength = path.length
+            obj.target = res
+            obj.path = path
+            prio = true
+          }
         }
       })
 
@@ -217,9 +223,9 @@ let creepHandler = {
       _.each(resources, (x) => {
         x = Game.getObjectById(x)
         if (x != undefined) {
-          if (x instanceof Structure && (x.store.energy == x.storageCapacity || x.store.energy >= creep.carryCapacity) || x instanceof Resource) {
-            s.push(x)
-          }
+          let b1 = x instanceof StructureContainer && (x.store.energy == x.storageCapacity || x.store.energy >= creep.carryCapacity)
+          let b2 = x instanceof Resource
+          if (x.canClaim(creep) && (b1 || b2)) { s.push(x) }
         }
       })
       obj = findClosest(room, creep, s)
