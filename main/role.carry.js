@@ -1,19 +1,19 @@
 module.exports = {
   run: function (handler, creep) {
-    if (creep.c.carry.energy == 0) {
-      handler.nextTask(creep.c, 'h')
+    if (creep.carry.energy == 0) {
+      handler.nextTask(creep, 'h')
       return
     }
 
     let target = creep.getTarget()
 
     if (target && creep.getTask() == 'c') {
-      switch (creep.c.transfer(target, RESOURCE_ENERGY)) {
-        case ERR_NOT_IN_RANGE: { creep.move(); break }
+      switch (creep.transfer(target, RESOURCE_ENERGY)) {
+        case ERR_NOT_IN_RANGE: { creep.moveAlongPath(); break }
         default: { creep.clearTarget() }
       }
     } else {
-      var targets = creep.c.room.find(FIND_STRUCTURES, {
+      var targets = creep.room.find(FIND_STRUCTURES, {
         filter: (structure) => {
           return (structure.structureType == STRUCTURE_EXTENSION ||
             structure.structureType == STRUCTURE_SPAWN ||
@@ -22,11 +22,11 @@ module.exports = {
       })
 
       if (targets.length == 0) {
-        handler.nextTask(creep.c)
+        handler.nextTask(creep)
         return
       }
 
-      let o = handler.findClosest(creep.c.room, creep.c.pos, targets)
+      let o = handler.findClosest(creep.room, creep.pos, targets)
       if (!o) return;
       creep.setTarget(o.target, o.path, 'c')
     }

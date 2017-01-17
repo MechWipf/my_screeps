@@ -77,14 +77,10 @@ let helper = {
   }
 };
 
-function CreepObject(creep) {
-  this.c = creep
-}
-
-CreepObject.prototype.move = function () {
-  switch (this.c.moveByPath(this.c.memory.target.path)) {
+Creep.prototype.moveAlongPath = function () {
+  switch (this.moveByPath(this.memory.target.path)) {
     case OK: {
-      this.c.memory.target.range = this.c.memory.target.range - 1
+      this.memory.target.range = this.memory.target.range - 1
       break
     }
     default: {
@@ -93,23 +89,23 @@ CreepObject.prototype.move = function () {
     }
   }
 
-  if (this.c.memory.target.time < Game.time) {
+  if (this.memory.target.time < Game.time) {
     this.recalcPath()
   }
 }
 
-CreepObject.prototype.getTarget = function () {
+Creep.prototype.getTarget = function () {
   let targetObj = false
 
   try {
-    targetObj = Game.getObjectById(this.c.memory.target.obj)
+    targetObj = Game.getObjectById(this.memory.target.obj)
   } catch (err) { }
 
   return targetObj
 }
 
-CreepObject.prototype.setTarget = function (obj, path, task) {
-  if (!path) path = this.c.pos.findPathTo(obj);
+Creep.prototype.setTarget = function (obj, path, task) {
+  if (!path) path = this.pos.findPathTo(obj);
 
   let target = {
     obj: obj.id,
@@ -118,65 +114,109 @@ CreepObject.prototype.setTarget = function (obj, path, task) {
     time: Game.time + 3 + Math.round(Math.random(0, 1) * 5)
   }
 
-  if (task) target.task = task;
+  if (task) { this.setTask(task) }
 
-  this.c.memory.target = target
+  this.memory.target = target
 
   return true
 }
 
-CreepObject.prototype.clearTarget = function () {
-  delete this.c.memory.target
+Creep.prototype.clearTarget = function () {
+  delete this.memory.target
 }
 
-CreepObject.prototype.getRange = function () {
-  return this.c.memory.target.range
+Creep.prototype.getRange = function () {
+  return this.memory.target.range
 }
 
-CreepObject.prototype.getTask = function () {
+Creep.prototype.setTask = function (task) {
   try {
-    return this.c.memory.target.task
+    this.memory.task[0] = task
   } catch (err) {
-    return ''
+    this.memory.task = [task]
   }
 }
 
-CreepObject.prototype.recalcPath = function () {
+Creep.prototype.pushTask = function (task) {
+  try {
+    this.memory.task.push(task)
+  } catch (err) {
+    this.setTask(task)
+  }
+}
+
+Creep.prototype.popTask = function (task) {
+  try {
+    return this.memory.task.shift(0)
+  } catch (err) {
+    return false
+  }
+}
+
+Creep.prototype.getTask = function () {
+  try {
+    return this.memory.task[0]
+  } catch (err) {
+    return false
+  }
+}
+
+Creep.prototype.clearTasks = function () {
+  try {
+    delete this.memory.task
+    return true
+  } catch (err) {
+    return false
+  }
+}
+
+Creep.prototype.recalcPath = function () {
   let target = this.getTarget()
   if (!target) {
-    delete this.c.memory.target
+    delete this.memory.target
     return false
   }
 
-  let path = this.c.pos.findPathTo(target)
-  this.c.memory.target.path = Room.serializePath(path)
-  this.c.memory.target.range = path.length
-  this.c.memory.target.time = Game.time + 3 + Math.round(Math.random(0, 1) * 5)
+  let path = this.findPathTo(target)
+  this.memory.target.path = Room.serializePath(path)
+  this.memory.target.range = path.length
+  this.memory.target.time = Game.time + 3 + Math.round(Math.random(0, 1) * 5)
 
   return true
 }
 
-CreepObject.prototype.getCurrentRole = function () {
-  return this.c.memory.c
+Creep.prototype.getCurrentRole = function () {
+  return this.memory.c
 }
 
-CreepObject.prototype.setCurrentRole = function (role) {
-  if (_.intersection([role], this.c.memory.r).length == 1) {
-    this.c.memory.c = role
+Creep.prototype.setCurrentRole = function (role) {
+  if (_.intersection([role], this.memory.r).length == 1) {
+    this.memory.c = role
     return true
   }
 
   return false
 }
 
-CreepObject.prototype.getRoles = function () {
-  return this.c.memory.r
+Creep.prototype.getRoles = function () {
+  return this.memory.r
 }
 
-CreepObject.prototype.getMainRole = function () {
-  return this.c.memory.type
+Creep.prototype.getMainRole = function () {
+  return this.memory.type
 }
 
-helper.CreepObject = CreepObject
+Creep.prototype.findPathTo = function (targetPos, opts = { maxOps: 100 }) {
+  let room = this.room
+  let path = room.findPath(this.pos, targetPos, opts)
+
+  if (!path.length) {
+    opts.maxOps = 500
+    opts.ignoreCreeps = true
+    path = room.findPath(this.pos, targetPos, opts)
+  }
+
+  return path
+}
 
 module.exports = helper

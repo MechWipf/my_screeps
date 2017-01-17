@@ -4,8 +4,8 @@ const helper = require('helper')
 
 let roleBuild = {
   run: function (handler, creep) {
-    if (creep.c.carry.energy == 0) {
-      handler.nextTask(creep.c, 'h')
+    if (creep.carry.energy == 0) {
+      handler.nextTask(creep, 'h')
       return
     }
 
@@ -15,32 +15,32 @@ let roleBuild = {
       let res = 0
 
       switch (creep.getTask()) {
-        case 'construction': { res = creep.c.build(target); break }
-        case 'repair': { res = creep.c.repair(target); if (target.hits < target.hitsMax) { break } }
+        case 'construction': { res = creep.build(target); break }
+        case 'repair': { res = creep.repair(target); if (target.hits < target.hitsMax) { break } }
         default: { res = -1 }
       }
 
       switch (res) {
         case OK: { break }
-        case ERR_NOT_IN_RANGE: { creep.move(); break }
-        default: { if (!getJob(creep)) { creep.clearTarget(), handler.nextTask(creep.c) } }
+        case ERR_NOT_IN_RANGE: { creep.moveAlongPath(); break }
+        default: { if (!getJob(creep)) { creep.clearTarget(), handler.nextTask(creep) } }
       }
     } else {
       if (!getJob(creep)) {
-        handler.nextTask(creep.c);
+        handler.nextTask(creep);
       }
     }
   }
 }
 
 function getJob(creep) {
-  let o = helper.getTarget(creep.c, 'repair')
+  let o = helper.getTarget(creep, 'repair')
   if (o) {
     creep.setTarget(o.target, o.path, 'repair')
     return true
   }
 
-  o = helper.getTarget(creep.c, 'construction')
+  o = helper.getTarget(creep, 'construction')
   if (o) {
     creep.setTarget(o.target, o.path, 'construction')
     return true
