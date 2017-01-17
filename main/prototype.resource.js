@@ -3,7 +3,7 @@
 Resource.prototype.claim = function (creep) {
   if (this.memory.claims == undefined) { this.memory.claims = [] }
   this.memory.claims.push(creep.id)
-  this.memory.claimCount = this.memory.claimCount | 0 + creep.carryCapacity
+  this.memory.claimCount = this.memory.claimCount || 0 + creep.carryCapacity
 }
 
 Resource.prototype.canClaim = function (creep) {
@@ -15,17 +15,17 @@ Resource.prototype.canClaim = function (creep) {
     this.memory.claimTimer = Game.time + 1
     let claimCount = 0
 
-    _(claims).each((x, i) => {
+    _.each(claims, (x, i) => {
       let c = Game.getObjectById(x)
-      if (!c) { delete claims[i] }
-      else { claimCount = claimCount + c.carryCapacity }
+      if (!c) { claims.shift(i) }
+      else { claimCount += c.carryCapacity }
     })
 
     this.memory.claimCount = claimCount
     this.memory.claims = claims
   }
 
-  return this.memory.claimCount + creep.carryCapacity <= this.amount
+  return this.memory.claimCount || 0 + creep.carryCapacity <= this.amount
 }
 
 Resource.prototype.rewokeClaim = function (creep) {
@@ -35,12 +35,13 @@ Resource.prototype.rewokeClaim = function (creep) {
   let claims = this.memory.claims
   let claimCount = 0
 
-  _(claims).each((x, i) => {
+  _.each(claims, (x, i) => {
     let c = Game.getObjectById(x)
-    if (!c || c.id == creep.id) { delete claims[i] }
-    else { claimCount = claimCount + c.carryCapacity }
+    if (!c || c.id == creep.id) { claims.shift(i) }
+    else { claimCount += c.carryCapacity }
   })
 
+  console.log(creep.name, 'revoked', this.id, claimCount)  
   this.memory.claimCount = claimCount
   this.memory.claims = claims
 

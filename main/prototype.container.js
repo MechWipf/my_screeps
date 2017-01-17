@@ -3,7 +3,7 @@
 StructureContainer.prototype.claim = function (creep) {
   if (this.memory.claims == undefined) { this.memory.claims = [] }
   this.memory.claims.push(creep.id)
-  this.memory.claimCount = this.memory.claimCount | 0 + creep.carryCapacity
+  this.memory.claimCount = (this.memory.claimCount || 0) + creep.carryCapacity
 }
 
 StructureContainer.prototype.canClaim = function (creep) {
@@ -15,16 +15,16 @@ StructureContainer.prototype.canClaim = function (creep) {
     this.memory.claimTimer = Game.time + 1
     let claimCount = 0
 
-    _(claims).each((x, i) => {
+    _.each(claims, (x, i) => {
       let c = Game.getObjectById(x)
-      if (!c) { delete claims[i] }
+      if (!c) { claims.shift(i) }
       else { claimCount = claimCount + c.carryCapacity }
     })
 
     this.memory.claimCount = claimCount
     this.memory.claims = claims
   }
-
+  
   return this.memory.claimCount + creep.carryCapacity <= _(this.store).sum()
 }
 
@@ -35,9 +35,9 @@ StructureContainer.prototype.rewokeClaim = function (creep) {
   let claims = this.memory.claims
   let claimCount = 0
 
-  _(claims).each((x, i) => {
+  _.each(claims, (x, i) => {
     let c = Game.getObjectById(x)
-    if (!c || c.id == creep.id) { delete claims[i] }
+    if (!c || c.id == creep.id) { claims.shift(i) }
     else { claimCount = claimCount + c.carryCapacity }
   })
 
