@@ -97,14 +97,17 @@ let creepHandler = {
         memory = { type: 'miner', t:'-', r: ['h'] }
         cost = 300
 
+        let work = 2
+        
         while (cost + 50 <= maxCost) {
           let diff = maxCost - cost
 
-          if (diff >= 100) {
+          if (diff >= 100 && work < 5) {
             pattern.push(WORK)
+            work++
             cost += 100
           } else if (diff >= 50) {
-            pattern.push(CARRY)
+            pattern.push(MOVE)
             cost += 50
           }
         }
