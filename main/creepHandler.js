@@ -67,6 +67,11 @@ let creepHandler = {
       break
     }
 
+    
+    if (!(((spawn.room.memory.spawnTimer || 0) < Game.time) || spawn.room.energyAvailable == spawn.room.energyCapacityAvailable)) {
+      return
+    }
+
     let cost = 0
     let maxCost = spawn.room.energyAvailable
 

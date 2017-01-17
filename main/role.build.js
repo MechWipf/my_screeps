@@ -21,9 +21,9 @@ let roleBuild = {
       }
 
       switch (res) {
-        case OK: { getJob(creep); break }
+        case OK: { break }
         case ERR_NOT_IN_RANGE: { creep.move(); break }
-        default: { creep.clearTarget(), handler.nextTask(creep.c) }
+        default: { if (!getJob(creep)) { creep.clearTarget(), handler.nextTask(creep.c) } }
       }
     } else {
       if (!getJob(creep)) {
