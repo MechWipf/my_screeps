@@ -168,7 +168,7 @@ let creepHandler = {
         }
       })
 
-      _.forEach(room.find(FIND_STRUCTURES, { filter: (r) => { return r.structureType === 'container' } }), (res) => {
+      _.forEach(room.find(FIND_MY_STRUCTURES, { filter: (r) => { return r.structureType === 'container' } }), (res) => {
         resList.push(res.id)
 
         let path = creep.findPathTo(res.pos)
