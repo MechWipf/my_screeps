@@ -58,18 +58,20 @@ module.exports = {
               try {
                 storage = Game.getObjectById(creep.memory.storage)
                 creep.transfer(storage, RESOURCE_ENERGY)
-                creep.say(Math.floor((storage.store.energy+creep.carry.energy)/storage.storeCapacity*100)+'%')
-                if (storage.store.energy === storage.storeCapacity) {break}
+                creep.say(Math.floor((storage.store.energy + creep.carry.energy) / storage.storeCapacity * 100) + '%')
+                if (storage.store.energy === storage.storeCapacity) { break }
               } catch (err) {
                 creep.say('..?')
                 delete creep.memory.storage
               }
             } else {
               storage = creep.pos.findClosestByRange(FIND_STRUCTURES, { structureType: 'container' }, 1)
-              creep.transfer(storage, RESOURCE_ENERGY)
-              creep.memory.storage = storage.id
-              creep.say(Math.floor((storage.store.energy+creep.carry.energy)/storage.storeCapacity*100)+'%')
-              if (storage.store.energy === storage.storeCapacity) {break}
+              if (storage) {
+                creep.transfer(storage, RESOURCE_ENERGY)
+                creep.memory.storage = storage.id
+                creep.say(Math.floor((storage.store.energy + creep.carry.energy) / storage.storeCapacity * 100) + '%')
+                if (storage.store.energy === storage.storeCapacity) { break }
+              }
             }
 
           }
