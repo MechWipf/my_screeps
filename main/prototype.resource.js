@@ -3,7 +3,7 @@
 Resource.prototype.claim = function (creep) {
   if (this.memory.claims == undefined) { this.memory.claims = [] }
   this.memory.claims.push(creep.id)
-  this.memory.claimCount = this.memory.claimCount + creep.carryCapacity
+  this.memory.claimCount = this.memory.claimCount | 0 + creep.carryCapacity
 }
 
 Resource.prototype.canClaim = function (creep) {
