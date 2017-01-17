@@ -7,6 +7,7 @@ let creepHandler = {
   roles: {},
   time: {},
   resources: {},
+  loop: 0,
 
   run: function () {
     let creepCount = 0
@@ -14,6 +15,7 @@ let creepHandler = {
 
     _.forEach(Game.creeps, (creep) => {
       try {
+        this.loop = 0
         creepCount++
 
         if (!creepCountByType[creep.getMainRole()]) {
@@ -32,14 +34,22 @@ let creepHandler = {
       }
     })
 
-    if ((creepCountByType[''] || 0) < 3) {
-      this.spawn()
-    } else if (creepCount < 4 && (creepCountByType['miner'] || 0) < 1) {
-      this.spawn('miner')
-    }
+    let myRooms = {}
+    let normalCreepCount = creepCountByType[''] || 0
+    let minerCreepCount = creepCountByType['miner'] || 0
+
+    _.each(Game.spawns, (spawn) => {
+      if (normalCreepCount < 1 || normalCreepCount < minerCreepCount * 2) {
+        this.spawn(spawn)
+      } else if (minerCreepCount < spawn.room.memory.sources.length) {
+        this.spawn(spawn, 'miner')
+      }
+    })
   },
 
   runTask: function (creep) {
+    this.loop = this.loop + 1
+
     let task = creep.memory.t
     let roles = creep.memory.r
 
@@ -52,6 +62,7 @@ let creepHandler = {
         this.nextTask(creep, roles[0])
       }
     } else if (this.roles[task]) {
+      if (this.loop > 4) { return }
       this.roles[task].run(this, creep)
     } else {
       this.nextTask(creep)
@@ -68,14 +79,7 @@ let creepHandler = {
     })
   },
 
-  spawn: function (spawnType) {
-    let spawn
-    for (let i in Game.spawns) {
-      spawn = Game.spawns[i]
-      break
-    }
-
-
+  spawn: function (spawn, spawnType) {
     if (!(((spawn.room.memory.spawnTimer || 0) < Game.time) || spawn.room.energyAvailable == spawn.room.energyCapacityAvailable)) {
       return
     }
@@ -83,9 +87,14 @@ let creepHandler = {
     let cost = 0
     let maxCost = spawn.room.energyAvailable
 
+    let pattern
+    let memory
+
+
     switch (spawnType) {
       case 'miner': {
-        let pattern = [WORK, WORK, CARRY, MOVE]
+        pattern = [WORK, WORK, CARRY, MOVE]
+        memory = { type: 'miner', t:'-', r: ['h'] }
         cost = 300
 
         while (cost + 50 <= maxCost) {
@@ -98,27 +107,38 @@ let creepHandler = {
             pattern.push(CARRY)
             cost += 50
           }
-
         }
-
-        spawn.createCreep(pattern, null, { type: 'miner', t: '-', r: ['h'] })
         break
       }
       default: {
-        let pattern = [WORK, CARRY, MOVE, MOVE]
+        pattern = [WORK, CARRY, MOVE, MOVE]
+        memory = { type: '', t: '-', r: ['h', 'c', 'b', 'u'] }
         cost = 250
 
+        let work = 1
+        let carry = 1
+
         while (cost + 100 <= maxCost) {
-          cost += 100
-          pattern.push(CARRY, MOVE)
+          let diff = maxCost - cost
+
+          if (diff >= 150 && work <= carry / 3) {
+            cost += 150
+            pattern.push(WORK, MOVE)
+            work++
+          } else if (diff >= 100) {
+            cost += 100
+            pattern.push(CARRY, MOVE)
+            carry++
+          }
         }
 
-        spawn.createCreep(pattern, null, { type: '', t: '-', r: ['h', 'c', 'b', 'u'] })
         break
       }
     }
 
-    spawn.room.memory.spawnTimer = Game.time + cost / 2
+    spawn.createCreep(pattern, null, memory)
+    
+    spawn.room.memory.spawnTimer = Game.time + cost
   },
 
   nextTask: function (creep, task) {
@@ -175,6 +195,7 @@ let creepHandler = {
 
       _.forEach(room.find(FIND_STRUCTURES, { filter: (r) => { return r.structureType === 'container' } }), (res) => {
         resList.push(res.id)
+        if (!(res.store.energy == res.storageCapacity || res.store.energy >= creep.carryCapacity)) { return }
 
         let path = creep.findPathTo(res.pos)
 
@@ -192,7 +213,11 @@ let creepHandler = {
       let s = []
       _.each(resources, (x) => {
         x = Game.getObjectById(x)
-        if (x != undefined) { s.push(x) }
+        if (x != undefined) {
+          if (x instanceof Structure && (x.store.energy == x.storageCapacity || x.store.energy >= creep.carryCapacity) || x instanceof Resource) {
+            s.push(x)
+          }
+        }
       })
       obj = findClosest(room, creep, s)
     }
@@ -211,7 +236,7 @@ let creepHandler = {
 
       _.forEach(room.find(FIND_SOURCES), (res) => {
         resList.push(res.id)
-        if (!res.isOwned()) {
+        if (!res.isOwned() || res.isOwned().id == creep.id) {
           let path = creep.findPathTo(res.pos)
           if (path.length < slength) {
             slength = path.length
@@ -226,7 +251,7 @@ let creepHandler = {
       let s = []
       _.each(sources, (x) => {
         x = Game.getObjectById(x)
-        if (!x.isOwned()) { s.push(x) }
+        if (!x.isOwned() || x.isOwned().id == creep.id) { s.push(x) }
       })
       obj = findClosest(room, creep, s)
     }
