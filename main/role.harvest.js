@@ -35,6 +35,8 @@ module.exports = {
           creep.setTask(H_TASK_MOVE)
           creep.pushTask(H_TASK_MINE)
           creep.say('\u26cf')
+
+          if (creep.getRoles().length == 1) { res.target.setOwner(creep) }
         } else {
           creep.say('\u274c')
         }
@@ -54,12 +56,12 @@ module.exports = {
           if (creep.getRoles().length > 1) { handler.nextTask(creep); break }
           else {
             let storage
-            try { storage = Game.getObjectById(storage) } catch (err) { storage = false }
+            try { storage = Game.getObjectById(creep.memory.storage) } catch (err) { storage = false }
             if (storage) {
               creep.transfer(storage, RESOURCE_ENERGY)
               if (storage.store.energy === storage.storeCapacity) { break }
             } else {
-              storage = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, {filter: (x) => { return x.structureType == 'container' }} , 1)
+              storage = creep.pos.findClosestByRange(FIND_STRUCTURES, { filter: (x) => { return x.structureType == 'container' } }, 2)
               if (storage) {
                 creep.transfer(storage, RESOURCE_ENERGY)
                 creep.memory.storage = storage.id

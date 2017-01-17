@@ -161,7 +161,6 @@ let creepHandler = {
       let prio = false
 
       _.forEach(room.find(FIND_DROPPED_RESOURCES), (res) => {
-        if (res.amount < 100) { return false }
         resList.push(res.id)
 
         let path = creep.findPathTo(res.pos)
@@ -174,7 +173,7 @@ let creepHandler = {
         }
       })
 
-      _.forEach(room.find(FIND_MY_STRUCTURES, { filter: (r) => { return r.structureType === 'container' } }), (res) => {
+      _.forEach(room.find(FIND_STRUCTURES, { filter: (r) => { return r.structureType === 'container' } }), (res) => {
         resList.push(res.id)
 
         let path = creep.findPathTo(res.pos)
@@ -187,10 +186,14 @@ let creepHandler = {
         }
       })
 
-      room.memory.resource = resList
+      room.memory.resources = resList
       room.memory.resTime = Game.time + 10
     } else {
-      let s = _.map(resources, (v, k) => { return Game.getObjectById(v) })
+      let s = []
+      _.each(resources, (x) => {
+        x = Game.getObjectById(x)
+        if (x != undefined) { s.push(x) }
+      })
       obj = findClosest(room, creep, s)
     }
 
@@ -208,19 +211,23 @@ let creepHandler = {
 
       _.forEach(room.find(FIND_SOURCES), (res) => {
         resList.push(res.id)
-
-        let path = creep.findPathTo(res.pos)
-
-        if (path.length < slength) {
-          slength = path.length
-          obj.target = res
-          obj.path = path
+        if (!res.isOwned()) {
+          let path = creep.findPathTo(res.pos)
+          if (path.length < slength) {
+            slength = path.length
+            obj.target = res
+            obj.path = path
+          }
         }
       })
 
       room.memory.sources = resList
     } else {
-      let s = _.map(sources, (v, k) => { return Game.getObjectById(v) })
+      let s = []
+      _.each(sources, (x) => {
+        x = Game.getObjectById(x)
+        if (!x.isOwned()) { s.push(x) }
+      })
       obj = findClosest(room, creep, s)
     }
 
@@ -229,6 +236,8 @@ let creepHandler = {
 }
 
 function findClosest(room, creep, targetR) {
+  if (!targetR.length) { return false }
+
   let shortest = { target: null, path: null }
   let slength = 1e999
 

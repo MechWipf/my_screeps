@@ -133,6 +133,7 @@ Creep.prototype.getRange = function () {
 
 Creep.prototype.setTask = function (task) {
   try {
+    if (this.memory.task == undefined) { this.memory.task = [] }
     this.memory.task[0] = task
   } catch (err) {
     this.memory.task = [task]
@@ -213,7 +214,7 @@ Creep.prototype.findPathTo = function (target, opts = { maxOps: 100 }) {
     let room = this.room
     let targetPos = target instanceof RoomPosition ? target : target.pos
     let path = room.findPath(this.pos, targetPos, opts)
-    
+
     if (!path.length) {
       opts.maxOps = 500
       opts.ignoreCreeps = true
@@ -225,6 +226,26 @@ Creep.prototype.findPathTo = function (target, opts = { maxOps: 100 }) {
     console.log('Pathfinder error: ', err)
     return []
   }
+}
+
+Source.prototype.setOwner = function (creep) {
+  if (Memory.sources == undefined) { Memory.sources = {} }
+
+  if (Memory.sources[this.id] == undefined) {
+    Memory.sources[this.id] = {}
+  }
+
+  Memory.sources[this.id].owner = creep.id
+}
+
+Source.prototype.isOwned = function () {
+  if (Memory.sources == undefined) { Memory.sources = {} }
+
+  if (Memory.sources[this.id] == undefined) { return false }
+  if (Memory.sources[this.id].owner == undefined) { return false }
+
+  let creep = Game.getObjectById(Memory.sources[this.id].owner)
+  return creep == undefined ? false : creep
 }
 
 module.exports = helper
