@@ -1,3 +1,5 @@
+'use strict'
+
 let helper = {
   clean: function () {
     var toReturn = false;
@@ -18,7 +20,7 @@ let helper = {
     var object = null;
     switch (type) {
       case 'spawner': {
-        object = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+        object = creep.pos.findClosestByPath(FIND_MY_STRUCTURES, {
           filter: (structure) => {
             return (structure.structureType == STRUCTURE_EXTENSION || structure.structureType == STRUCTURE_SPAWN) && structure.energy < structure.energyCapacity;
           }
@@ -30,7 +32,7 @@ let helper = {
         break;
       }
       case 'tower': {
-        object = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+        object = creep.pos.findClosestByPath(FIND_MY_STRUCTURES, {
           filter: (structure) => {
             return (structure.structureType == STRUCTURE_TOWER) && structure.energy < structure.energyCapacity;
           }
@@ -105,7 +107,7 @@ Creep.prototype.getTarget = function () {
 }
 
 Creep.prototype.setTarget = function (obj, path, task) {
-  if (!path) path = this.pos.findPathTo(obj);
+  if (!path) path = this.findPathTo(obj)
 
   let target = {
     obj: obj.id,
@@ -206,17 +208,23 @@ Creep.prototype.getMainRole = function () {
   return this.memory.type
 }
 
-Creep.prototype.findPathTo = function (targetPos, opts = { maxOps: 100 }) {
-  let room = this.room
-  let path = room.findPath(this.pos, targetPos, opts)
+Creep.prototype.findPathTo = function (target, opts = { maxOps: 100 }) {
+  try {
+    let room = this.room
+    let targetPos = target instanceof RoomPosition ? target : target.pos
+    let path = room.findPath(this.pos, targetPos, opts)
+    
+    if (!path.length) {
+      opts.maxOps = 500
+      opts.ignoreCreeps = true
+      path = room.findPath(this.pos, targetPos, opts)
+    }
 
-  if (!path.length) {
-    opts.maxOps = 500
-    opts.ignoreCreeps = true
-    path = room.findPath(this.pos, targetPos, opts)
+    return path
+  } catch (err) {
+    console.log('Pathfinder error: ', err)
+    return []
   }
-
-  return path
 }
 
 module.exports = helper

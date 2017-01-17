@@ -9,5 +9,5 @@ creepHandler.init()
 
 module.exports.loop = function () {
   PathFinder.use(true)
-  try { creepHandler.run() } catch (err) { console.log(err) }
+  creepHandler.run()
 }

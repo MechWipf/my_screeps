@@ -13,19 +13,23 @@ let creepHandler = {
     let creepCountByType = {}
 
     _.forEach(Game.creeps, (creep) => {
-      creepCount++
+      try {
+        creepCount++
 
-      if (!creepCountByType[creep.getMainRole()]) {
-        creepCountByType[creep.getMainRole()] = 1
-      } else {
-        creepCountByType[creep.getMainRole()] = creepCountByType[creep.getMainRole()] + 1
+        if (!creepCountByType[creep.getMainRole()]) {
+          creepCountByType[creep.getMainRole()] = 1
+        } else {
+          creepCountByType[creep.getMainRole()] = creepCountByType[creep.getMainRole()] + 1
+        }
+
+        if (creep.memory.t == undefined) {
+          creep.memory.t = '-'
+        }
+
+        this.runTask(creep)
+      } catch (err) {
+        console.log(err, creep)
       }
-
-      if (creep.memory.t == undefined) {
-        creep.memory.t = '-'
-      }
-
-      this.runTask(creep)
     })
 
     if ((creepCountByType[''] || 0) < 3) {
@@ -38,6 +42,8 @@ let creepHandler = {
   runTask: function (creep) {
     let task = creep.memory.t
     let roles = creep.memory.r
+
+    global.debug_creep = creep
 
     if (task === "-") {
       if (creep.room.controller.ticksToDowngrade < 4500 && _.indexOf(roles, 'u') > -1) {
