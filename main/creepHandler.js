@@ -111,6 +111,8 @@ let creepHandler = {
         break
       }
     }
+
+    spawn.room.memory.spawnTimer = Game.time + cost/2
   },
 
   nextTask: function (creep, task) {
