@@ -41,7 +41,6 @@ Resource.prototype.rewokeClaim = function (creep) {
     else { claimCount += c.carryCapacity }
   })
 
-  console.log(creep.name, 'revoked', this.id, claimCount)  
   this.memory.claimCount = claimCount
   this.memory.claims = claims
 

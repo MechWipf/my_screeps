@@ -37,12 +37,15 @@ let creepHandler = {
     let myRooms = {}
     let normalCreepCount = creepCountByType[''] || 0
     let minerCreepCount = creepCountByType['miner'] || 0
+    let upgraderCreepCount = creepCountByType['upgrader'] || 0
 
     _.each(Game.spawns, (spawn) => {
       if (normalCreepCount < 1 || normalCreepCount < minerCreepCount * 2) {
         this.spawn(spawn)
       } else if (minerCreepCount < spawn.room.memory.sources.length) {
         this.spawn(spawn, 'miner')
+      } else if (upgraderCreepCount < minerCreepCount) {
+        this.spawn(spawn, 'upgrader')
       }
     })
   },
@@ -113,24 +116,32 @@ let creepHandler = {
         }
         break
       }
+      case 'upgrader': {
+        memory = { type: 'upgrader', t: '-', r: ['h', 'u'] }
+      }
       default: {
         pattern = [WORK, CARRY, MOVE, MOVE]
-        memory = { type: '', t: '-', r: ['h', 'c', 'b', 'u'] }
+        memory = memory || { type: '', t: '-', r: ['h', 'c', 'b', 'u'] }
         cost = 250
 
         let work = 1
         let carry = 1
+        let move = 2
 
         while (cost + 100 <= maxCost) {
           let diff = maxCost - cost
 
-          if (diff >= 150 && work <= carry / 3) {
+          if (diff >= 150 && work <= carry / 6) {
             cost += 150
             pattern.push(WORK, MOVE)
             work++
-          } else if (diff >= 100) {
-            cost += 100
-            pattern.push(CARRY, MOVE)
+          } else if (diff >= 50 && (move - work) <= carry / 2) {
+            cost += 50
+            pattern.push(MOVE)
+            move++
+          } else if (diff >= 50) {
+            cost += 50
+            pattern.push(CARRY)
             carry++
           }
         }
@@ -139,6 +150,8 @@ let creepHandler = {
       }
     }
 
+    pattern = _.sortBy(pattern)
+    console.log('Build Creep', pattern, 'for', cost)
     spawn.createCreep(pattern, null, memory)
 
     spawn.room.memory.spawnTimer = Game.time + cost
