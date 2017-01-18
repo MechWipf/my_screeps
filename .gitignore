@@ -5,7 +5,7 @@ npm-debug.log*
 
 
 # Configs
-config.json
+creds.js
 
 # Runtime data
 pids
