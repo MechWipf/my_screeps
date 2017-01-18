@@ -6,7 +6,7 @@ import './components/classes/creep'
 
 log.showSource = false
 
-if (Config.USE_PATHFINDER) {
+if (Config.USE_PATHFINDER == true) {
   PathFinder.use(true)
 }
 

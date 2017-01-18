@@ -134,7 +134,7 @@ export class Log extends LogLevels {
         out.push(color('INFO   ', 'green'));
         break;
       case Log.DEBUG:
-        out.push(color('DEBUG   ', 'gray'));
+        out.push(color('DEBUG  ', 'gray'));
         break;
       default:
         break;

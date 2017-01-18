@@ -5,6 +5,7 @@ export const ROOM_TASK_CHECK_SOURCES: string = 'checkSources'
 class Task {
   time: number
   name: string
+  data?: Object
 }
 
 declare global {
@@ -16,8 +17,9 @@ declare global {
     // Tasks the room can run
     tasks: { [key: string]: Function }
     // Yeah
-    queueTask(time: number, task: string): void
     queueTask(task: Task): void
+    queueTask(time: number, task: string): void
+    queueTask(time: number, task: string, data: Object): void
     pollTask(): Task | false
     queueCount(): number
   }
@@ -30,14 +32,14 @@ Room.prototype.logInfo = function (this: Room) {
 Room.prototype.run = function (this: Room) {
   if (this.memory.init == undefined) {
     this.memory.init = true
-    this.queueTask(100, ROOM_TASK_CHECK_SOURCES)
+    this.queueTask(10, ROOM_TASK_CHECK_SOURCES)
   }
 
   let iter = Math.min(10, this.queueCount())
 
   while (iter > 0) {
     iter--
-    
+
     // Get the top task
     let task: Task | false = this.pollTask()
     // Okay... no task found
@@ -54,17 +56,18 @@ Room.prototype.run = function (this: Room) {
   }
 }
 
-Room.prototype.queueTask = function (this: Room, arg: Task | number, task?: string) {
+Room.prototype.queueTask = function (this: Room, arg: Task | number, task?: string, data?: Object) {
   if (this.memory.queue == undefined) { this.memory.queue = [] }
   let queue: Object[] = this.memory.queue
 
-  if (typeof arg == 'object') {
-    queue.push(arg)
-  } else if (task != undefined) {
+  if (task != undefined) {
     let o = new Task()
-    o.time = Game.time + <number>arg
+    o.time = Game.time + (arg as number)
     o.name = task
+    if (data != undefined) { o.data = data }
     queue.push(o)
+  } else if (typeof arg == 'object') {
+    queue.push(arg)
   }
 }
 
@@ -101,5 +104,5 @@ tasks[ROOM_TASK_CHECK_SOURCES] = function (this: Room) {
   // And requeu the task
   this.queueTask(100, ROOM_TASK_CHECK_SOURCES)
 
-  log.info('Checking sources. Found', log.color(sources.length.toString(), 'orange') )
+  log.info(log.color('[' + this.name + ']', 'cyan'), 'Checking sources. Found', log.color(sources.length.toString(), 'orange'))
 }

@@ -54,7 +54,7 @@ module.exports =
 	__webpack_require__(/*! ./components/classes/room */ 16);
 	__webpack_require__(/*! ./components/classes/creep */ 17);
 	log_1.log.showSource = false;
-	if (Config.USE_PATHFINDER) {
+	if (Config.USE_PATHFINDER == true) {
 	    PathFinder.use(true);
 	}
 	function loop() {
@@ -233,7 +233,7 @@ module.exports =
 	                out.push(color('INFO   ', 'green'));
 	                break;
 	            case Log.DEBUG:
-	                out.push(color('DEBUG   ', 'gray'));
+	                out.push(color('DEBUG  ', 'gray'));
 	                break;
 	            default:
 	                break;
@@ -3320,7 +3320,7 @@ module.exports =
 	Room.prototype.run = function () {
 	    if (this.memory.init == undefined) {
 	        this.memory.init = true;
-	        this.queueTask(100, exports.ROOM_TASK_CHECK_SOURCES);
+	        this.queueTask(10, exports.ROOM_TASK_CHECK_SOURCES);
 	    }
 	    let iter = Math.min(10, this.queueCount());
 	    while (iter > 0) {
@@ -3337,19 +3337,22 @@ module.exports =
 	        }
 	    }
 	};
-	Room.prototype.queueTask = function (arg, task) {
+	Room.prototype.queueTask = function (arg, task, data) {
 	    if (this.memory.queue == undefined) {
 	        this.memory.queue = [];
 	    }
 	    let queue = this.memory.queue;
-	    if (typeof arg == 'object') {
-	        queue.push(arg);
-	    }
-	    else if (task != undefined) {
+	    if (task != undefined) {
 	        let o = new Task();
 	        o.time = Game.time + arg;
 	        o.name = task;
+	        if (data != undefined) {
+	            o.data = data;
+	        }
 	        queue.push(o);
+	    }
+	    else if (typeof arg == 'object') {
+	        queue.push(arg);
 	    }
 	};
 	Room.prototype.pollTask = function () {
@@ -3379,7 +3382,7 @@ module.exports =
 	    });
 	    this.memory.sources = sources;
 	    this.queueTask(100, exports.ROOM_TASK_CHECK_SOURCES);
-	    log_1.log.info('Checking sources. Found', log_1.log.color(sources.length.toString(), 'orange'));
+	    log_1.log.info(log_1.log.color('[' + this.name + ']', 'cyan'), 'Checking sources. Found', log_1.log.color(sources.length.toString(), 'orange'));
 	};
 
 

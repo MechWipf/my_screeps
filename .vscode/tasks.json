@@ -9,10 +9,10 @@
   ],
   "tasks": [
     {
-      "taskName": "watch",
+      "taskName": "default",
       "args": [],
       "isBuildCommand": true,
-      "isWatching": true
+      "isWatching": false
     }
   ]
 }
