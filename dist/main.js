@@ -3312,6 +3312,7 @@ module.exports =
 	"use strict";
 	const log_1 = __webpack_require__(/*! ../support/log */ 3);
 	exports.ROOM_TASK_CHECK_SOURCES = 'checkSources';
+	exports.ROOM_TASK_PLAN_ROAD = 'planRoad';
 	class Task {
 	}
 	Room.prototype.logInfo = function () {
@@ -3330,7 +3331,7 @@ module.exports =
 	            break;
 	        }
 	        if (task.time <= Game.time) {
-	            this.tasks[task.name].bind(this)();
+	            this.tasks[task.name].bind(this)(task.data);
 	        }
 	        else {
 	            this.queueTask(task);
@@ -3383,6 +3384,9 @@ module.exports =
 	    this.memory.sources = sources;
 	    this.queueTask(100, exports.ROOM_TASK_CHECK_SOURCES);
 	    log_1.log.info(log_1.log.color('[' + this.name + ']', 'cyan'), 'Checking sources. Found', log_1.log.color(sources.length.toString(), 'orange'));
+	};
+	tasks[exports.ROOM_TASK_PLAN_ROAD] = function (data) {
+	    log_1.log.info(data);
 	};
 
 

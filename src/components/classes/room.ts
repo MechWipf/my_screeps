@@ -1,6 +1,7 @@
 import { log } from '../support/log'
 
 export const ROOM_TASK_CHECK_SOURCES: string = 'checkSources'
+export const ROOM_TASK_PLAN_ROAD: string = 'planRoad'
 
 class Task {
   time: number
@@ -22,6 +23,9 @@ declare global {
     queueTask(time: number, task: string, data: Object): void
     pollTask(): Task | false
     queueCount(): number
+    cachePath(source: RoomPosition, target: RoomPosition): void
+    getCachedPath(source: RoomPosition, target: RoomPosition): PathStep[]
+    findCachedPath(source: RoomPosition, target: RoomPosition, sourceRange: number, targetRange: number): PathStep[]
   }
 }
 
@@ -48,7 +52,7 @@ Room.prototype.run = function (this: Room) {
     // Check time
     if (task.time <= Game.time) {
       // Requeue the task for later
-      this.tasks[task.name].bind(this)()
+      this.tasks[task.name].bind(this)(task.data)
     } else {
       // All okay. Run the task
       this.queueTask(task)
@@ -105,4 +109,7 @@ tasks[ROOM_TASK_CHECK_SOURCES] = function (this: Room) {
   this.queueTask(100, ROOM_TASK_CHECK_SOURCES)
 
   log.info(log.color('[' + this.name + ']', 'cyan'), 'Checking sources. Found', log.color(sources.length.toString(), 'orange'))
+}
+
+tasks[ROOM_TASK_PLAN_ROAD] = function (this: Room, data: Object) {
 }
