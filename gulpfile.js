@@ -15,8 +15,16 @@ gulp.task('build', gulp.series(() => {
 }))
 
 gulp.task('upload', () => {
-    return gulp.src('/dist/*.js')
-        .pipe(screeps(require('./creds')))
+    let src = [
+        'dist/*.js'
+    ]
+
+    return gulp.src(src)
+        .pipe(screeps(require('./creds').dev))
+})
+
+gulp.task('watch', () => {
+    return gulp.watch('src/**/*.*', gulp.series(['build', 'upload']))
 })
 
 gulp.task('default', gulp.series(['build', 'upload']))

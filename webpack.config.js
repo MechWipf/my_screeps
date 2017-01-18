@@ -9,6 +9,10 @@ module.exports = {
     devtoolModuleFilenameTemplate: '[resource-path]',
   },
 
+  externals: [
+    { "map": "map" }
+  ],
+
   target: "node",
 
   node: {
@@ -24,11 +28,6 @@ module.exports = {
     // Add '.ts' and '.tsx' as resolvable extensions.
     extensions: ['', '.js', '.ts', '.d.ts', '.tsx']
   },
-
-  externals: [
-    {
-    },
-  ],
 
   module: {
     loaders: [
