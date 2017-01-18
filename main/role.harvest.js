@@ -15,8 +15,11 @@ module.exports = {
     let target = creep.getTarget()
 
     switch (task) {
-      case H_TASK_SEARCH: { }
+      case H_TASK_SEARCH: {}
       default: {
+        if (!((creep.memory.timeout || 0) < Game.time)) { break }
+        creep.memory.timeout = Game.time + Math.random(0,1)*10
+
         creep.clearTasks()
         if (creep.getRoles().length > 1) {
           let res = handler.getResource(creep, RESOURCE_ENERGY)
@@ -62,11 +65,16 @@ module.exports = {
               creep.transfer(storage, RESOURCE_ENERGY)
               if (storage.store.energy === storage.storeCapacity) { break }
             } else {
-              storage = creep.pos.findClosestByRange(FIND_STRUCTURES, { filter: (x) => { return x.structureType == 'container' } }, 2)
+              storage = creep.pos.findClosestByRange(FIND_STRUCTURES, { filter: (x) => { return x.structureType == 'container' && x.pos.getRangeTo(creep) < 2 } })
               if (storage) {
                 creep.transfer(storage, RESOURCE_ENERGY)
                 creep.memory.storage = storage.id
                 if (storage.store.energy === storage.storeCapacity) { break }
+              } else {
+                let construction = creep.pos.findClosestByRange(FIND_CONSTRUCTION_SITES, { filter: (x) => { return x.pos.getRangeTo(creep) < 2 } })
+                if (construction) {
+                  creep.build(construction)
+                }
               }
             }
 
