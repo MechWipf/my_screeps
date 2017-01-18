@@ -20,6 +20,8 @@ export function loop() {
   for (let i in Game.rooms) {
     let room: Room = Game.rooms[i]
 
+    room.run()
+
     // Clears any non-existing creep memory.
     for (let name in Memory.creeps) {
       let creep: any = Memory.creeps[name]

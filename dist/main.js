@@ -63,6 +63,7 @@ module.exports =
 	    }
 	    for (let i in Game.rooms) {
 	        let room = Game.rooms[i];
+	        room.run();
 	        for (let name in Memory.creeps) {
 	            let creep = Memory.creeps[name];
 	            if (creep.room === room.name) {
@@ -155,6 +156,15 @@ module.exports =
 	    return color(Game.time.toString(), 'gray');
 	}
 	class Log extends log_levels_1.LogLevels {
+	    constructor() {
+	        super();
+	        this.color = color;
+	        _.defaultsDeep(Memory, { log: {
+	                level: Config.LOG_LEVEL,
+	                showSource: Config.LOG_PRINT_LINES,
+	                showTick: Config.LOG_PRINT_TICK,
+	            } });
+	    }
 	    static loadSourceMap() {
 	        try {
 	            var SourceMapConsumer = __webpack_require__(/*! source-map */ 4).SourceMapConsumer;
@@ -173,14 +183,6 @@ module.exports =
 	    set showSource(value) { Memory.log.showSource = value; }
 	    get showTick() { return Memory.log.showTick; }
 	    set showTick(value) { Memory.log.showTick = value; }
-	    constructor() {
-	        super();
-	        _.defaultsDeep(Memory, { log: {
-	                level: Config.LOG_LEVEL,
-	                showSource: Config.LOG_PRINT_LINES,
-	                showTick: Config.LOG_PRINT_TICK,
-	            } });
-	    }
 	    trace(error) {
 	        if (this.level >= Log.ERROR && error.stack) {
 	            console.log(this.resolveStack(error.stack));
@@ -3309,22 +3311,75 @@ module.exports =
 
 	"use strict";
 	const log_1 = __webpack_require__(/*! ../support/log */ 3);
+	exports.ROOM_TASK_CHECK_SOURCES = 'checkSources';
+	class Task {
+	}
 	Room.prototype.logInfo = function () {
 	    log_1.log.info('Hello world, ', this.name, '!');
 	};
 	Room.prototype.run = function () {
-	    this.tasks['checkSources'].bind(this)();
+	    if (this.memory.init == undefined) {
+	        this.memory.init = true;
+	        this.queueTask(100, exports.ROOM_TASK_CHECK_SOURCES);
+	    }
+	    let iter = Math.min(10, this.queueCount());
+	    while (iter > 0) {
+	        iter--;
+	        let task = this.pollTask();
+	        if (!task) {
+	            break;
+	        }
+	        if (task.time <= Game.time) {
+	            this.tasks[task.name].bind(this)();
+	        }
+	        else {
+	            this.queueTask(task);
+	        }
+	    }
+	};
+	Room.prototype.queueTask = function (arg, task) {
+	    if (this.memory.queue == undefined) {
+	        this.memory.queue = [];
+	    }
+	    let queue = this.memory.queue;
+	    if (typeof arg == 'object') {
+	        queue.push(arg);
+	    }
+	    else if (task != undefined) {
+	        let o = new Task();
+	        o.time = Game.time + arg;
+	        o.name = task;
+	        queue.push(o);
+	    }
+	};
+	Room.prototype.pollTask = function () {
+	    if (this.memory.queue == undefined) {
+	        return false;
+	    }
+	    if (this.memory.queue.length == 0) {
+	        return false;
+	    }
+	    let o = this.memory.queue.shift(0);
+	    return o;
+	};
+	Room.prototype.queueCount = function () {
+	    if (this.memory.queue == undefined) {
+	        return 0;
+	    }
+	    return this.memory.queue.length;
 	};
 	Room.prototype.tasks = {};
 	let tasks = Room.prototype.tasks;
-	tasks['checkSources'] = function () {
-	    let sources = this.memory.sources || [];
+	tasks[exports.ROOM_TASK_CHECK_SOURCES] = function () {
+	    let sources = [];
 	    this.find(FIND_SOURCES, {
 	        filter: (x) => {
 	            sources.push(x.id);
 	        }
 	    });
 	    this.memory.sources = sources;
+	    this.queueTask(100, exports.ROOM_TASK_CHECK_SOURCES);
+	    log_1.log.info('Checking sources. Found', log_1.log.color(sources.length.toString(), 'orange'));
 	};
 
 

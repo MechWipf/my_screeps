@@ -155,6 +155,8 @@ export class Log extends LogLevels {
 
     return _.map(stack.split('\n').map(resolve), 'final').join('\n');
   }
+
+  public color = color
 }
 
 if (Config.LOG_LOAD_SOURCE_MAP) {
