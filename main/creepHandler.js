@@ -101,6 +101,7 @@ let creepHandler = {
         cost = 300
 
         let work = 2
+        let move = 1
 
         while (cost + 50 <= maxCost) {
           let diff = maxCost - cost
@@ -109,9 +110,11 @@ let creepHandler = {
             pattern.push(WORK)
             work++
             cost += 100
-          } else if (diff >= 50) {
+          } else if (diff >= 50 && move < work) {
             pattern.push(MOVE)
             cost += 50
+          } else {
+            break
           }
         }
         break

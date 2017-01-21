@@ -35,4 +35,22 @@ gulp.task('watch-dev', ['deploy-dev'], function () {
   })
 })
 
+gulp.task('upload-dev', () => {
+    let src = [
+        'main/*.js'
+    ]
+
+    return gulp.src(src)
+        .pipe(screeps(require('./creds').dev))
+})
+
+gulp.task('upload-master', () => {
+    let src = [
+        'main/*.js'
+    ]
+
+    return gulp.src(src)
+        .pipe(screeps(require('./creds').master))
+})
+
 gulp.task('default', ['watch-dev'])
