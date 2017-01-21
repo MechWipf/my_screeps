@@ -52,7 +52,7 @@ module.exports =
 	const Config = __webpack_require__(/*! ./config */ 1);
 	const log_1 = __webpack_require__(/*! ./components/support/log */ 3);
 	__webpack_require__(/*! ./components/classes/room */ 16);
-	__webpack_require__(/*! ./components/classes/creep */ 17);
+	__webpack_require__(/*! ./components/classes/creep */ 18);
 	log_1.log.showSource = false;
 	if (Config.USE_PATHFINDER == true) {
 	    PathFinder.use(true);
@@ -64,14 +64,15 @@ module.exports =
 	    for (let i in Game.rooms) {
 	        let room = Game.rooms[i];
 	        room.run();
-	        for (let name in Memory.creeps) {
-	            let creep = Memory.creeps[name];
-	            if (creep.room === room.name) {
-	                if (!Game.creeps[name]) {
-	                    log_1.log.info("Clearing non-existing creep memory:", name);
-	                    delete Memory.creeps[name];
-	                }
-	            }
+	    }
+	    for (let i in Game.creeps) {
+	        let creep = Game.creeps[i];
+	        creep.run();
+	    }
+	    for (let name in Memory.creeps) {
+	        if (!Game.creeps[name]) {
+	            log_1.log.info("Clearing non-existing creep memory:", name);
+	            delete Memory.creeps[name];
 	        }
 	    }
 	}
@@ -3311,66 +3312,34 @@ module.exports =
 
 	"use strict";
 	const log_1 = __webpack_require__(/*! ../support/log */ 3);
+	const task_1 = __webpack_require__(/*! ./task */ 17);
 	exports.ROOM_TASK_CHECK_SOURCES = 'checkSources';
 	exports.ROOM_TASK_PLAN_ROAD = 'planRoad';
-	class Task {
-	}
+	exports.ROOM_TASK_PLAN_PATH = 'planPath';
+	task_1.MixinTaskable(Room);
 	Room.prototype.logInfo = function () {
 	    log_1.log.info('Hello world, ', this.name, '!');
 	};
 	Room.prototype.run = function () {
 	    if (this.memory.init == undefined) {
 	        this.memory.init = true;
-	        this.queueTask(10, exports.ROOM_TASK_CHECK_SOURCES);
+	        this.taskPush(2, exports.ROOM_TASK_CHECK_SOURCES);
 	    }
-	    let iter = Math.min(10, this.queueCount());
+	    let iter = Math.min(10, this.taskCount());
 	    while (iter > 0) {
 	        iter--;
-	        let task = this.pollTask();
+	        let task = this.taskShift();
 	        if (!task) {
 	            break;
 	        }
 	        if (task.time <= Game.time) {
-	            this.tasks[task.name].bind(this)(task.data);
+	            log_1.log.debug(log_1.log.color('[' + this.name + ']', 'cyan'), 'running task', log_1.log.color(task.name, 'orange'));
+	            this.taskRun(task);
 	        }
 	        else {
-	            this.queueTask(task);
+	            this.taskPush(task);
 	        }
 	    }
-	};
-	Room.prototype.queueTask = function (arg, task, data) {
-	    if (this.memory.queue == undefined) {
-	        this.memory.queue = [];
-	    }
-	    let queue = this.memory.queue;
-	    if (task != undefined) {
-	        let o = new Task();
-	        o.time = Game.time + arg;
-	        o.name = task;
-	        if (data != undefined) {
-	            o.data = data;
-	        }
-	        queue.push(o);
-	    }
-	    else if (typeof arg == 'object') {
-	        queue.push(arg);
-	    }
-	};
-	Room.prototype.pollTask = function () {
-	    if (this.memory.queue == undefined) {
-	        return false;
-	    }
-	    if (this.memory.queue.length == 0) {
-	        return false;
-	    }
-	    let o = this.memory.queue.shift(0);
-	    return o;
-	};
-	Room.prototype.queueCount = function () {
-	    if (this.memory.queue == undefined) {
-	        return 0;
-	    }
-	    return this.memory.queue.length;
 	};
 	Room.prototype.tasks = {};
 	let tasks = Room.prototype.tasks;
@@ -3378,20 +3347,144 @@ module.exports =
 	    let sources = [];
 	    this.find(FIND_SOURCES, {
 	        filter: (x) => {
+	            if (x.pos.findInRange(FIND_HOSTILE_STRUCTURES, 5).length > 0) {
+	                return;
+	            }
 	            sources.push(x.id);
+	            _.forEach(this.find(FIND_MY_SPAWNS), (spawn) => {
+	                this.taskPush(sources.length + 1, exports.ROOM_TASK_PLAN_PATH, [spawn.pos.x, spawn.pos.y, spawn.pos.roomName, x.pos.x, x.pos.y, x.pos.roomName]);
+	            });
 	        }
 	    });
 	    this.memory.sources = sources;
-	    this.queueTask(100, exports.ROOM_TASK_CHECK_SOURCES);
+	    this.taskPush(100, exports.ROOM_TASK_CHECK_SOURCES);
 	    log_1.log.info(log_1.log.color('[' + this.name + ']', 'cyan'), 'Checking sources. Found', log_1.log.color(sources.length.toString(), 'orange'));
 	};
-	tasks[exports.ROOM_TASK_PLAN_ROAD] = function (data) {
-	    log_1.log.info(data);
+	tasks[exports.ROOM_TASK_PLAN_PATH] = function (task) {
+	    let data = task.data;
+	    let target = new RoomPosition(data[0], data[1], data[2]);
+	    let origin = new RoomPosition(data[3], data[4], data[5]);
+	    if (target.roomName == origin.roomName) {
+	        let opts = { ignoreCreeps: true, plainCost: 1, swampCost: 1 };
+	        let goal = { pos: target, range: 1 };
+	        let path = PathFinder.search(origin, goal, opts);
+	        let chunk = [];
+	        _.each(path.path, (x) => {
+	            if (chunk.length >= 10) {
+	                this.taskPush(1 + Math.random() * 10, exports.ROOM_TASK_PLAN_ROAD, chunk);
+	                chunk = [];
+	            }
+	            chunk.push([x.x, x.y, x.roomName]);
+	        });
+	        if (chunk.length > 0) {
+	            this.taskPush(1 + Math.random() * 10, exports.ROOM_TASK_PLAN_ROAD, chunk);
+	        }
+	    }
+	};
+	tasks[exports.ROOM_TASK_PLAN_ROAD] = function (task) {
+	    let data = task.data;
+	    if (_.keys(Game.constructionSites).length + data.length > 80) {
+	        this.taskPush(10 + Math.random() * 30, exports.ROOM_TASK_PLAN_ROAD, data);
+	        log_1.log.debug('Hit build limit');
+	        return;
+	    }
+	    for (var i = 0; i < data.length; i++) {
+	        var pos = new RoomPosition(data[i][0], data[i][1], data[i][2]);
+	        let roads = pos.lookFor(LOOK_STRUCTURES);
+	        let constr = pos.lookFor(LOOK_CONSTRUCTION_SITES);
+	        if (!roads.length && !constr.length) {
+	            pos.createConstructionSite(STRUCTURE_ROAD);
+	        }
+	    }
 	};
 
 
 /***/ },
 /* 17 */
+/*!****************************************!*\
+  !*** ./src/components/classes/task.ts ***!
+  \****************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	function MixinTaskable(derive) {
+	    let base = Taskable;
+	    Object.getOwnPropertyNames(base.prototype).forEach(name => {
+	        derive.prototype[name] = base.prototype[name];
+	    });
+	}
+	exports.MixinTaskable = MixinTaskable;
+	class Taskable {
+	    taskPush(arg, task, data) {
+	        if (this.memory.queue == undefined) {
+	            this.memory.queue = [];
+	        }
+	        let queue = this.memory.queue;
+	        if (task != undefined) {
+	            let o = {
+	                name: task,
+	                time: Math.floor(Game.time + arg)
+	            };
+	            if (data != undefined) {
+	                o.data = data;
+	            }
+	            queue.push(o);
+	        }
+	        else if (typeof arg == 'object') {
+	            queue.push(arg);
+	        }
+	    }
+	    taskUnshift(arg, task, data) {
+	        if (this.memory.queue == undefined) {
+	            this.memory.queue = [];
+	        }
+	        let queue = this.memory.queue;
+	        if (task != undefined) {
+	            let o = {
+	                name: task,
+	                time: Math.floor(Game.time + arg)
+	            };
+	            if (data != undefined) {
+	                o.data = data;
+	            }
+	            queue.unshift(o);
+	        }
+	        else if (typeof arg == 'object') {
+	            queue.unshift(arg);
+	        }
+	    }
+	    taskShift() {
+	        if (this.memory.queue == undefined) {
+	            return false;
+	        }
+	        if (this.memory.queue.length == 0) {
+	            return false;
+	        }
+	        return this.memory.queue.shift(0);
+	    }
+	    taskTop() {
+	        if (this.memory.queue == undefined) {
+	            return false;
+	        }
+	        if (this.memory.queue.length == 0) {
+	            return false;
+	        }
+	        return this.memory.queue[0];
+	    }
+	    taskCount() {
+	        if (this.memory.queue == undefined) {
+	            return 0;
+	        }
+	        return this.memory.queue.length;
+	    }
+	    taskRun(task) {
+	        this.tasks[task.name].bind(this)(task);
+	    }
+	}
+
+
+/***/ },
+/* 18 */
 /*!*****************************************!*\
   !*** ./src/components/classes/creep.ts ***!
   \*****************************************/
@@ -3399,32 +3492,42 @@ module.exports =
 
 	"use strict";
 	const Config = __webpack_require__(/*! ../../config */ 1);
-	const log_1 = __webpack_require__(/*! ../support/log */ 3);
-	Creep.prototype.logInfo = function () {
-	    log_1.log.info('Hello world, ', this.name, '!');
+	const task_1 = __webpack_require__(/*! ./task */ 17);
+	task_1.MixinTaskable(Creep);
+	Creep.prototype.run = function () {
+	    let task = this.taskShift();
+	    if (task && task.time >= Game.time) {
+	        this.taskRun(task);
+	    }
+	    else if (task) {
+	        this.taskUnshift(task);
+	    }
+	    else {
+	        this.taskUnshift(1, 'h_search');
+	    }
 	};
-	Creep.prototype.roles = {};
+	Creep.prototype.tasks = {};
 	for (let role of Config.CREEP_ROLES) {
-	    __webpack_require__(/*! ../roles */ 18)("./" + role).register();
+	    __webpack_require__(/*! ../roles */ 19)("./" + role).register();
 	}
 
 
 /***/ },
-/* 18 */
+/* 19 */
 /*!***************************************!*\
   !*** ./src/components/roles ^\.\/.*$ ***!
   \***************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./creep.build": 19,
-		"./creep.build.ts": 19,
-		"./creep.harvest": 20,
-		"./creep.harvest.ts": 20,
-		"./creep.move": 21,
-		"./creep.move.ts": 21,
-		"./creep.upgrade": 22,
-		"./creep.upgrade.ts": 22
+		"./creep.build": 20,
+		"./creep.build.ts": 20,
+		"./creep.harvest": 21,
+		"./creep.harvest.ts": 21,
+		"./creep.move": 22,
+		"./creep.move.ts": 22,
+		"./creep.upgrade": 23,
+		"./creep.upgrade.ts": 23
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -3437,11 +3540,11 @@ module.exports =
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 18;
+	webpackContext.id = 19;
 
 
 /***/ },
-/* 19 */
+/* 20 */
 /*!*********************************************!*\
   !*** ./src/components/roles/creep.build.ts ***!
   \*********************************************/
@@ -3454,7 +3557,7 @@ module.exports =
 
 
 /***/ },
-/* 20 */
+/* 21 */
 /*!***********************************************!*\
   !*** ./src/components/roles/creep.harvest.ts ***!
   \***********************************************/
@@ -3462,22 +3565,17 @@ module.exports =
 
 	"use strict";
 	function register() {
-	}
-	exports.register = register;
-
-
-/***/ },
-/* 21 */
-/*!********************************************!*\
-  !*** ./src/components/roles/creep.move.ts ***!
-  \********************************************/
-/***/ function(module, exports) {
-
-	"use strict";
-	function register() {
-	    let roles = Creep.prototype.roles;
-	    roles['move_to'] = function (creep) {
-	        creep.logInfo();
+	    let tasks = Creep.prototype.tasks;
+	    tasks['h_mine'] = function (task) {
+	        let target = Game.getObjectById(task.data);
+	        if (!target) {
+	            return;
+	        }
+	        this.taskUnshift(task);
+	    };
+	    tasks['h_search'] = function (task) {
+	        task.time = Game.time + 10;
+	        this.taskUnshift(task);
 	    };
 	}
 	exports.register = register;
@@ -3485,6 +3583,34 @@ module.exports =
 
 /***/ },
 /* 22 */
+/*!********************************************!*\
+  !*** ./src/components/roles/creep.move.ts ***!
+  \********************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	function register() {
+	    let tasks = Creep.prototype.tasks;
+	    tasks['m_move_to'] = function (task) {
+	        let data = task.data;
+	        let target = Game.getObjectById(data.target);
+	        if (!target) {
+	            return;
+	        }
+	        if (this.pos.getRangeTo(target.pos) > data.range) {
+	            this.moveByPath(data.path);
+	        }
+	        else {
+	            return;
+	        }
+	        this.taskUnshift(task);
+	    };
+	}
+	exports.register = register;
+
+
+/***/ },
+/* 23 */
 /*!***********************************************!*\
   !*** ./src/components/roles/creep.upgrade.ts ***!
   \***********************************************/
