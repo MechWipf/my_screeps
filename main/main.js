@@ -14,6 +14,7 @@ const helper = require('helper')
 
 helper.clean()
 creepHandler.init()
+Game.creepHandler = creepHandler
 
 module.exports.loop = function () {
   PathFinder.use(true)

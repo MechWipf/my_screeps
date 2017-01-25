@@ -40,6 +40,7 @@ let creepHandler = {
     let upgraderCreepCount = creepCountByType['upgrader'] || 0
 
     _.each(Game.spawns, (spawn) => {
+      if (spawn.spawning) { return }
       if (normalCreepCount < 1 || normalCreepCount < minerCreepCount * 2) {
         this.spawn(spawn)
       } else if (minerCreepCount < spawn.room.memory.sources.length) {
@@ -112,6 +113,7 @@ let creepHandler = {
             cost += 100
           } else if (diff >= 50 && move < work) {
             pattern.push(MOVE)
+            move++
             cost += 50
           } else {
             break
