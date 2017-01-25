@@ -24,7 +24,7 @@ gulp.task('build', gulp.series(
             .pipe(gulp.dest('dist'))
     },
     // Patch the mapfile so screeps can read it
-    function pathSourceMap() {
+    function patchSourceMap() {
         return gulp.src('dist/map.json')
             .pipe(insert.prepend('module.exports='))
             .pipe(rename({ extname: '.js' }))
