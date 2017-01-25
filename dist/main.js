@@ -52,12 +52,14 @@ module.exports =
 	const Config = __webpack_require__(/*! ./config */ 1);
 	const log_1 = __webpack_require__(/*! ./components/support/log */ 3);
 	__webpack_require__(/*! ./components/classes/room */ 16);
-	__webpack_require__(/*! ./components/classes/creep */ 18);
-	log_1.log.showSource = false;
+	__webpack_require__(/*! ./components/classes/creep */ 19);
+	log_1.log.showSource = true;
+	log_1.log.showSourceOnlyDebug = true;
 	if (Config.USE_PATHFINDER == true) {
 	    PathFinder.use(true);
 	}
 	function loop() {
+	    let cpu = Game.cpu.getUsed();
 	    if (!Memory.uuid || Memory.uuid > 100) {
 	        Memory.uuid = 0;
 	    }
@@ -74,6 +76,10 @@ module.exports =
 	            log_1.log.info("Clearing non-existing creep memory:", name);
 	            delete Memory.creeps[name];
 	        }
+	    }
+	    let cpuNow = Game.cpu.getUsed();
+	    if (cpuNow > 10) {
+	        log_1.log.info("Used CPU: ", cpuNow - cpu);
 	    }
 	}
 	exports.loop = loop;
@@ -92,8 +98,8 @@ module.exports =
 	exports.USE_PATHFINDER = true;
 	exports.LOG_LEVEL = log_levels_1.LogLevels.DEBUG;
 	exports.LOG_PRINT_TICK = true;
-	exports.LOG_PRINT_LINES = false;
-	exports.LOG_LOAD_SOURCE_MAP = false;
+	exports.LOG_PRINT_LINES = true;
+	exports.LOG_LOAD_SOURCE_MAP = true;
 	exports.CREEP_ROLES = [
 	    'creep.build',
 	    'creep.harvest',
@@ -160,11 +166,14 @@ module.exports =
 	    constructor() {
 	        super();
 	        this.color = color;
-	        _.defaultsDeep(Memory, { log: {
+	        _.defaultsDeep(Memory, {
+	            log: {
 	                level: Config.LOG_LEVEL,
 	                showSource: Config.LOG_PRINT_LINES,
+	                showSourceOnlyDebug: false,
 	                showTick: Config.LOG_PRINT_TICK,
-	            } });
+	            }
+	        });
 	    }
 	    static loadSourceMap() {
 	        try {
@@ -182,6 +191,8 @@ module.exports =
 	    set level(value) { Memory.log.level = value; }
 	    get showSource() { return Memory.log.showSource; }
 	    set showSource(value) { Memory.log.showSource = value; }
+	    get showSourceOnlyDebug() { return Memory.log.showSourceOnlyDebug; }
+	    set showSourceOnlyDebug(value) { Memory.log.showSourceOnlyDebug = value; }
 	    get showTick() { return Memory.log.showTick; }
 	    set showTick(value) { Memory.log.showTick = value; }
 	    trace(error) {
@@ -223,26 +234,32 @@ module.exports =
 	    }
 	    buildArguments(level) {
 	        let out = [];
+	        let showSource = false;
 	        switch (level) {
 	            case Log.ERROR:
+	                showSource = this.showSource;
 	                out.push(color('ERROR  ', 'red'));
 	                break;
 	            case Log.WARNING:
+	                showSource = this.showSource;
 	                out.push(color('WARNING', 'yellow'));
 	                break;
 	            case Log.INFO:
+	                showSource = this.showSource && !this.showSourceOnlyDebug;
 	                out.push(color('INFO   ', 'green'));
 	                break;
 	            case Log.DEBUG:
+	                showSource = this.showSource;
 	                out.push(color('DEBUG  ', 'gray'));
 	                break;
 	            default:
+	                showSource = this.showSource && !this.showSourceOnlyDebug;
 	                break;
 	        }
 	        if (this.showTick) {
 	            out.push(time());
 	        }
-	        if (this.showSource) {
+	        if (showSource) {
 	            out.push(this.getFileLine());
 	        }
 	        return out;
@@ -3313,17 +3330,23 @@ module.exports =
 	"use strict";
 	const log_1 = __webpack_require__(/*! ../support/log */ 3);
 	const task_1 = __webpack_require__(/*! ./task */ 17);
-	exports.ROOM_TASK_CHECK_SOURCES = 'checkSources';
-	exports.ROOM_TASK_PLAN_ROAD = 'planRoad';
-	exports.ROOM_TASK_PLAN_PATH = 'planPath';
+	const RoomConfig = __webpack_require__(/*! ../../config-rooms */ 18);
 	task_1.MixinTaskable(Room);
-	Room.prototype.logInfo = function () {
-	    log_1.log.info('Hello world, ', this.name, '!');
-	};
 	Room.prototype.run = function () {
 	    if (this.memory.init == undefined) {
 	        this.memory.init = true;
-	        this.taskPush(2, exports.ROOM_TASK_CHECK_SOURCES);
+	        if (this.controller && this.controller.level > 0) {
+	            this.memory.role = 'master';
+	        }
+	        else {
+	            this.memory.role = 'unowned';
+	        }
+	        let tasks = this.getRoleTasks();
+	        let time = Game.time;
+	        _.forEach(tasks, taskName => {
+	            time++;
+	            this.taskUnshift(time, taskName);
+	        });
 	    }
 	    let iter = Math.min(10, this.taskCount());
 	    while (iter > 0) {
@@ -3341,9 +3364,21 @@ module.exports =
 	        }
 	    }
 	};
+	Room.prototype.getRole = function () {
+	    let roleName = this.memory.role;
+	    let role = RoomConfig.roles[roleName];
+	    if (!role) {
+	        return 'unowned';
+	    }
+	    return roleName;
+	};
+	Room.prototype.getRoleTasks = function () {
+	    let role = this.getRole();
+	    return RoomConfig.roles[role]['tasks'];
+	};
 	Room.prototype.tasks = {};
 	let tasks = Room.prototype.tasks;
-	tasks[exports.ROOM_TASK_CHECK_SOURCES] = function () {
+	tasks[RoomConfig.TASK_CHECK_SOURCES] = function () {
 	    let sources = [];
 	    this.find(FIND_SOURCES, {
 	        filter: (x) => {
@@ -3352,15 +3387,15 @@ module.exports =
 	            }
 	            sources.push(x.id);
 	            _.forEach(this.find(FIND_MY_SPAWNS), (spawn) => {
-	                this.taskPush(sources.length + 1, exports.ROOM_TASK_PLAN_PATH, [spawn.pos.x, spawn.pos.y, spawn.pos.roomName, x.pos.x, x.pos.y, x.pos.roomName]);
+	                this.taskPush(sources.length + 1, RoomConfig.TASK_PLAN_PATH, [spawn.pos.x, spawn.pos.y, spawn.pos.roomName, x.pos.x, x.pos.y, x.pos.roomName]);
 	            });
 	        }
 	    });
 	    this.memory.sources = sources;
-	    this.taskPush(100, exports.ROOM_TASK_CHECK_SOURCES);
+	    this.taskPush(100, RoomConfig.TASK_CHECK_SOURCES);
 	    log_1.log.info(log_1.log.color('[' + this.name + ']', 'cyan'), 'Checking sources. Found', log_1.log.color(sources.length.toString(), 'orange'));
 	};
-	tasks[exports.ROOM_TASK_PLAN_PATH] = function (task) {
+	tasks[RoomConfig.TASK_PLAN_PATH] = function (task) {
 	    let data = task.data;
 	    let target = new RoomPosition(data[0], data[1], data[2]);
 	    let origin = new RoomPosition(data[3], data[4], data[5]);
@@ -3371,21 +3406,21 @@ module.exports =
 	        let chunk = [];
 	        _.each(path.path, (x) => {
 	            if (chunk.length >= 10) {
-	                this.taskPush(1 + Math.random() * 10, exports.ROOM_TASK_PLAN_ROAD, chunk);
+	                this.taskPush(1 + Math.random() * 10, RoomConfig.TASK_PLAN_ROAD, chunk);
 	                chunk = [];
 	            }
 	            chunk.push([x.x, x.y, x.roomName]);
 	        });
 	        if (chunk.length > 0) {
-	            this.taskPush(1 + Math.random() * 10, exports.ROOM_TASK_PLAN_ROAD, chunk);
+	            this.taskPush(1 + Math.random() * 10, RoomConfig.TASK_PLAN_ROAD, chunk);
 	        }
 	    }
 	};
-	tasks[exports.ROOM_TASK_PLAN_ROAD] = function (task) {
+	tasks[RoomConfig.TASK_PLAN_ROAD] = function (task) {
 	    let data = task.data;
 	    if (_.keys(Game.constructionSites).length + data.length > 80) {
-	        this.taskPush(10 + Math.random() * 30, exports.ROOM_TASK_PLAN_ROAD, data);
-	        log_1.log.debug('Hit build limit');
+	        this.taskPush(10 + Math.random() * 30, RoomConfig.TASK_PLAN_ROAD, data);
+	        log_1.log.warning('Hit build limit');
 	        return;
 	    }
 	    for (var i = 0; i < data.length; i++) {
@@ -3404,9 +3439,10 @@ module.exports =
 /*!****************************************!*\
   !*** ./src/components/classes/task.ts ***!
   \****************************************/
-/***/ function(module, exports) {
+/***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	const log_1 = __webpack_require__(/*! ../support/log */ 3);
 	function MixinTaskable(derive) {
 	    let base = Taskable;
 	    Object.getOwnPropertyNames(base.prototype).forEach(name => {
@@ -3478,13 +3514,73 @@ module.exports =
 	        return this.memory.queue.length;
 	    }
 	    taskRun(task) {
-	        this.tasks[task.name].bind(this)(task);
+	        let taskFn = this.tasks[task.name];
+	        if (taskFn == undefined) {
+	            log_1.log.warning('Task:', log_1.log.color(task.name, 'orange'), 'is not defined.');
+	            return true;
+	        }
+	        else {
+	            return taskFn.bind(this)(task) === true;
+	        }
 	    }
 	}
 
 
 /***/ },
 /* 18 */
+/*!*****************************!*\
+  !*** ./src/config-rooms.ts ***!
+  \*****************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	exports.TASK_CHECK_SOURCES = 'checkSources';
+	exports.TASK_PLAN_ROAD = 'planRoad';
+	exports.TASK_PLAN_PATH = 'planPath';
+	exports.TASK_SCOUT_ROOMS = 'scoutRooms';
+	exports.TASK_MANAGE_SLAVE = 'manageSlave';
+	exports.TASK_MANAGE_ROOM = 'manageRoom';
+	exports.TASK_CHECK_ROOM_LEVEL = 'checkRoomLevel';
+	exports.roles = {
+	    'master': {
+	        'tasks': [exports.TASK_CHECK_SOURCES, exports.TASK_MANAGE_ROOM, exports.TASK_SCOUT_ROOMS]
+	    },
+	    'slave': {
+	        'tasks': [exports.TASK_CHECK_SOURCES, exports.TASK_MANAGE_SLAVE]
+	    },
+	    'unowned': {
+	        'tasks': []
+	    }
+	};
+	exports.level = [
+	    {
+	        name: 'Rough Land',
+	        maxSlaves: 0,
+	        availableCreeps: {},
+	        require: {
+	            extensions: 0,
+	            energy: 0,
+	            creeps: () => { return true; },
+	        },
+	    },
+	    {
+	        name: 'Feudal',
+	        maxSlaves: 0,
+	        availableCreeps: {
+	            'allrounder': 2,
+	            'harvester-energy': true,
+	        },
+	        require: {
+	            extensions: 0,
+	            energy: 0,
+	            creeps: () => { return true; },
+	        },
+	    },
+	];
+
+
+/***/ },
+/* 19 */
 /*!*****************************************!*\
   !*** ./src/components/classes/creep.ts ***!
   \*****************************************/
@@ -3493,41 +3589,83 @@ module.exports =
 	"use strict";
 	const Config = __webpack_require__(/*! ../../config */ 1);
 	const task_1 = __webpack_require__(/*! ./task */ 17);
+	const config_creeps_1 = __webpack_require__(/*! ../../config-creeps */ 20);
 	task_1.MixinTaskable(Creep);
 	Creep.prototype.run = function () {
-	    let task = this.taskShift();
-	    if (task && task.time >= Game.time) {
-	        this.taskRun(task);
+	    let doNext = true;
+	    while (doNext) {
+	        doNext = false;
+	        let task = this.taskShift();
+	        if (task && task.time >= Game.time) {
+	            doNext = this.taskRun(task);
+	        }
+	        else if (task) {
+	            this.taskUnshift(task);
+	        }
 	    }
-	    else if (task) {
-	        this.taskUnshift(task);
+	};
+	Creep.prototype.getRole = function () {
+	    let roleName = this.memory.role;
+	    let role = config_creeps_1.Roles[roleName];
+	    if (!role) {
+	        throw "Creep without role: " + this.name;
 	    }
-	    else {
-	        this.taskUnshift(1, 'h_search');
-	    }
+	    return roleName;
+	};
+	Creep.prototype.getRoleTasks = function () {
+	    let role = this.getRole();
+	    let roleTasks = config_creeps_1.Roles[role]['tasks'];
+	    return roleTasks;
 	};
 	Creep.prototype.tasks = {};
 	for (let role of Config.CREEP_ROLES) {
-	    __webpack_require__(/*! ../roles */ 19)("./" + role).register();
+	    __webpack_require__(/*! ../roles */ 21)("./" + role).register();
 	}
 
 
 /***/ },
-/* 19 */
+/* 20 */
+/*!******************************!*\
+  !*** ./src/config-creeps.ts ***!
+  \******************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	exports.Roles = {
+	    'allrounder': {
+	        'tasks': ['h_search', 'h_mine'],
+	    },
+	    'harvester-energy': {
+	        'tasks': ['h_search', 'h_mine'],
+	    },
+	    'harvester-extractor': {},
+	    'manager': {},
+	    'carrier': {},
+	    'updater': {},
+	    'builder': {},
+	    'scout': {},
+	    'attack-range': {},
+	    'attack-close': {},
+	    'attack-heal': {}
+	};
+
+
+/***/ },
+/* 21 */
 /*!***************************************!*\
   !*** ./src/components/roles ^\.\/.*$ ***!
   \***************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	var map = {
-		"./creep.build": 20,
-		"./creep.build.ts": 20,
-		"./creep.harvest": 21,
-		"./creep.harvest.ts": 21,
-		"./creep.move": 22,
-		"./creep.move.ts": 22,
-		"./creep.upgrade": 23,
-		"./creep.upgrade.ts": 23
+		"./creep.build": 22,
+		"./creep.build.ts": 22,
+		"./creep.harvest": 23,
+		"./creep.harvest.ts": 23,
+		"./creep.move": 24,
+		"./creep.move.ts": 24,
+		"./creep.upgrade": 25,
+		"./creep.upgrade.ts": 25
 	};
 	function webpackContext(req) {
 		return __webpack_require__(webpackContextResolve(req));
@@ -3540,11 +3678,11 @@ module.exports =
 	};
 	webpackContext.resolve = webpackContextResolve;
 	module.exports = webpackContext;
-	webpackContext.id = 19;
+	webpackContext.id = 21;
 
 
 /***/ },
-/* 20 */
+/* 22 */
 /*!*********************************************!*\
   !*** ./src/components/roles/creep.build.ts ***!
   \*********************************************/
@@ -3557,7 +3695,7 @@ module.exports =
 
 
 /***/ },
-/* 21 */
+/* 23 */
 /*!***********************************************!*\
   !*** ./src/components/roles/creep.harvest.ts ***!
   \***********************************************/
@@ -3582,7 +3720,7 @@ module.exports =
 
 
 /***/ },
-/* 22 */
+/* 24 */
 /*!********************************************!*\
   !*** ./src/components/roles/creep.move.ts ***!
   \********************************************/
@@ -3601,16 +3739,17 @@ module.exports =
 	            this.moveByPath(data.path);
 	        }
 	        else {
-	            return;
+	            return true;
 	        }
 	        this.taskUnshift(task);
+	        return false;
 	    };
 	}
 	exports.register = register;
 
 
 /***/ },
-/* 23 */
+/* 25 */
 /*!***********************************************!*\
   !*** ./src/components/roles/creep.upgrade.ts ***!
   \***********************************************/
@@ -3624,4 +3763,4 @@ module.exports =
 
 /***/ }
 /******/ ]);
-//# sourceMappingURL=map.js
+//# sourceMappingURL=map.json

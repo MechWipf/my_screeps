@@ -1,3 +1,5 @@
+import { log } from '../support/log'
+
 export function MixinTaskable(derive: any) {
   let base = Taskable as any
   Object.getOwnPropertyNames(base.prototype).forEach(name => {
@@ -17,7 +19,7 @@ export interface ITaskable {
   taskShift(): Task | false
   taskTop(): Task | false
   taskCount(): number
-  taskRun(task: Task): void
+  taskRun(task: Task): boolean
 }
 
 export interface Task {
@@ -79,6 +81,12 @@ class Taskable implements ITaskable {
   }
 
   taskRun(this: Room | Creep, task: Task) {
-    this.tasks[task.name].bind(this)(task)
+    let taskFn = this.tasks[task.name]
+    if (taskFn == undefined) {
+      log.warning('Task:', log.color(task.name, 'orange'), 'is not defined.')
+      return true
+    } else {
+      return taskFn.bind(this)(task) === true
+    }
   }
 }

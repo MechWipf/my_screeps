@@ -1,4 +1,4 @@
-import * as Config from '../../config';
+import * as Config from '../../config/general';
 import { LogLevels } from './log.levels';
 
 // <caller> (<source>:<line>:<column>)
@@ -16,7 +16,7 @@ interface SourcePos {
 export function resolve(fileLine: string): SourcePos {
   let split = _.trim(fileLine).match(stackLineRe);
   if (!split || !Log.sourceMap) {
-    return <SourcePos> { compiled: fileLine, final: fileLine };
+    return <SourcePos>{ compiled: fileLine, final: fileLine };
   }
 
   let pos = { column: parseInt(split[4], 10), line: parseInt(split[3], 10) };
@@ -24,13 +24,13 @@ export function resolve(fileLine: string): SourcePos {
   let original = Log.sourceMap.originalPositionFor(pos);
   let line = `${split[1]} (${original.source}:${original.line})`;
   let out = {
-      caller: split[1],
-      compiled: fileLine,
-      final: line,
-      line: original.line,
-      original: line,
-      path: original.source,
-    };
+    caller: split[1],
+    compiled: fileLine,
+    final: line,
+    line: original.line,
+    original: line,
+    path: original.source,
+  };
 
   return out;
 }
@@ -63,6 +63,8 @@ export class Log extends LogLevels {
   public set level(value: number) { Memory.log.level = value; }
   public get showSource(): boolean { return Memory.log.showSource; }
   public set showSource(value: boolean) { Memory.log.showSource = value; }
+  public get showSourceOnlyDebug(): boolean { return Memory.log.showSourceOnlyDebug; }
+  public set showSourceOnlyDebug(value: boolean) { Memory.log.showSourceOnlyDebug = value; }
   public get showTick(): boolean { return Memory.log.showTick; }
   public set showTick(value: boolean) { Memory.log.showTick = value; }
 
@@ -70,11 +72,14 @@ export class Log extends LogLevels {
 
   constructor() {
     super();
-    _.defaultsDeep(Memory, { log: {
-      level: Config.LOG_LEVEL,
-      showSource: Config.LOG_PRINT_LINES,
-      showTick: Config.LOG_PRINT_TICK,
-    }});
+    _.defaultsDeep(Memory, {
+      log: {
+        level: Config.LOG_LEVEL,
+        showSource: Config.LOG_PRINT_LINES,
+        showSourceOnlyDebug: false,
+        showTick: Config.LOG_PRINT_TICK,
+      }
+    });
   }
 
   public trace(error: Error): Log {
@@ -123,26 +128,32 @@ export class Log extends LogLevels {
 
   private buildArguments(level: number): Array<string> {
     let out: Array<string> = [];
+    let showSource = false
     switch (level) {
       case Log.ERROR:
+        showSource = this.showSource
         out.push(color('ERROR  ', 'red'));
         break;
       case Log.WARNING:
+        showSource = this.showSource
         out.push(color('WARNING', 'yellow'));
         break;
       case Log.INFO:
+        showSource = this.showSource && !this.showSourceOnlyDebug
         out.push(color('INFO   ', 'green'));
         break;
       case Log.DEBUG:
+        showSource = this.showSource
         out.push(color('DEBUG  ', 'gray'));
         break;
       default:
+        showSource = this.showSource && !this.showSourceOnlyDebug
         break;
     }
     if (this.showTick) {
       out.push(time());
     }
-    if (this.showSource) {
+    if (showSource) {
       out.push(this.getFileLine());
     }
     return out;

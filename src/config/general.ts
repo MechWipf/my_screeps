@@ -1,4 +1,4 @@
-import { LogLevels } from './components/support/log.levels';
+import { LogLevels } from '../components/support/log.levels';
 
 /**
  * Enable this if you want a lot of text to be logged to console.
@@ -24,12 +24,12 @@ export const LOG_PRINT_TICK: boolean = true;
 /**
  * Prepend log output with source line.
  */
-export const LOG_PRINT_LINES: boolean = false;
+export const LOG_PRINT_LINES: boolean = true;
 
 /**
- * Load source maps and resolve source lines back to typeascript.
+ * Load source maps and resolve source lines back to typescript.
  */
-export const LOG_LOAD_SOURCE_MAP: boolean = false;
+export const LOG_LOAD_SOURCE_MAP: boolean = true;
 
 /**
  *

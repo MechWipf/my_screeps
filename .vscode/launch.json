@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "attach",
+      "name": "Programm starten",
+      "sourceMaps": true,
+      "port":9222,
+      "url": "https://screeps.com/a/#!/sim/survival",
+      "webRoot": "${workspaceRoot}",
+      "smartStep": true
+    }
+  ]
+}

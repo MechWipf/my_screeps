@@ -13,5 +13,7 @@ export function register() {
   tasks['h_search'] = function (this: Creep, task: Task) {
     task.time = Game.time + 10
     this.taskUnshift(task)
+
+    // return true
   }
 }

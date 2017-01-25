@@ -12,11 +12,13 @@ export function register() {
       this.moveByPath(data.path)
     } else {
       // We are done here, no more moving around
-      return
+      return true
     }
 
     // Put it back on top of the queue
     this.taskUnshift(task)
+    // And since moving is an async job, don't try to do something else
+    return false
   }
 
   // tasks['find_path'] = function (this: Creep, task: task) {}
