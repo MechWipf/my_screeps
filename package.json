@@ -1,7 +1,7 @@
 {
-  "name": "my_screeps",
+  "name": "mechwipf-screeps",
   "version": "0.0.1",
-  "description": "",
+  "description": "My Screeps project",
   "main": "gulpfile.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -15,5 +15,12 @@
   "bugs": {
     "url": "https://github.com/MechWipf/my_screeps/issues"
   },
-  "homepage": "https://github.com/MechWipf/my_screeps#readme"
+  "homepage": "https://github.com/MechWipf/my_screeps#readme",
+  "devDependencies": {
+    "gulp-clean": "^0.3.2",
+    "gulp-insert": "^0.5.0",
+    "gulp-rename": "^1.2.2",
+    "gulp-screeps": "^1.0.3",
+    "gulp-webpack": "^1.5.0"
+  }
 }

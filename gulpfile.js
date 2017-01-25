@@ -3,16 +3,39 @@
 let gulp = require('gulp')
 let webpack = require('gulp-webpack')
 let screeps = require('gulp-screeps')
+let insert = require('gulp-insert')
+let clean = require('gulp-clean')
+let rename = require('gulp-rename')
 
 gulp.task('clean', () => {
     return true
 })
 
-gulp.task('build', gulp.series(() => {
-    return gulp.src('src')
-        .pipe(webpack(require('./webpack.config.js')))
-        .pipe(gulp.dest('dist'))
-}))
+gulp.task('build', gulp.series(
+    // Cleanup
+    () => {
+        return gulp.src('dist/**/*')
+            .pipe(clean())
+    },
+    // Transcribe the app
+    () => {
+        return gulp.src('src')
+            .pipe(webpack(require('./webpack.config.js')))
+            .pipe(gulp.dest('dist'))
+    },
+    // Patch the mapfile so screeps can read it
+    () => {
+        return gulp.src('dist/map.json')
+            .pipe(insert.prepend('module.exports='))
+            .pipe(rename({ extname: '.js' }))
+            .pipe(gulp.dest('dist'))
+    },
+    // And cleanup the json file, since screeps can not read that
+    () => {
+        return gulp.src('dist/map.json')
+            .pipe(clean())
+    }
+))
 
 gulp.task('upload', () => {
     let src = [
