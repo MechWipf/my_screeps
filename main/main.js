@@ -19,4 +19,12 @@ Game.creepHandler = creepHandler
 module.exports.loop = function () {
   PathFinder.use(true)
   creepHandler.run()
+
+  _.each(Game.rooms, room => {
+    let hostile = room.find(FIND_HOSTILE_CREEPS)
+    if (hostile.length == 0) { return }
+    _.each(room.find(FIND_MY_STRUCTURES, { filter: s => { return s.structureType == STRUCTURE_TOWER } }), tower => {
+      tower.attack(hostile[0])
+    })
+  })
 }
