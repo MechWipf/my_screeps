@@ -30,13 +30,3 @@ export const LOG_PRINT_LINES: boolean = true;
  * Load source maps and resolve source lines back to typescript.
  */
 export const LOG_LOAD_SOURCE_MAP: boolean = true;
-
-/**
- *
- */
-export const CREEP_ROLES: string[] = [
-  'creep.build',
-  'creep.harvest',
-  'creep.upgrade',
-  'creep.move'
-]

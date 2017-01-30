@@ -49,12 +49,11 @@ module.exports =
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Config = __webpack_require__(/*! ./config */ 1);
+	const Config = __webpack_require__(/*! ./config/general */ 1);
 	const log_1 = __webpack_require__(/*! ./components/support/log */ 3);
-	__webpack_require__(/*! ./components/classes/room */ 16);
-	__webpack_require__(/*! ./components/classes/creep */ 19);
-	log_1.log.showSource = true;
-	log_1.log.showSourceOnlyDebug = true;
+	const Claims_1 = __webpack_require__(/*! ./components/classes/Claims */ 16);
+	__webpack_require__(/*! ./components/classes/Room */ 17);
+	__webpack_require__(/*! ./components/classes/Creep */ 21);
 	if (Config.USE_PATHFINDER == true) {
 	    PathFinder.use(true);
 	}
@@ -71,41 +70,36 @@ module.exports =
 	        let creep = Game.creeps[i];
 	        creep.run();
 	    }
-	    for (let name in Memory.creeps) {
-	        if (!Game.creeps[name]) {
-	            log_1.log.info("Clearing non-existing creep memory:", name);
-	            delete Memory.creeps[name];
-	        }
-	    }
 	    let cpuNow = Game.cpu.getUsed();
 	    if (cpuNow > 10) {
 	        log_1.log.info("Used CPU: ", cpuNow - cpu);
 	    }
 	}
 	exports.loop = loop;
+	for (let name in Memory.creeps) {
+	    if (!Game.creeps[name]) {
+	        log_1.log.info("Clearing non-existing creep memory:", name);
+	        delete Memory.creeps[name];
+	    }
+	}
+	Claims_1.claims.clean();
 
 
 /***/ },
 /* 1 */
-/*!***********************!*\
-  !*** ./src/config.ts ***!
-  \***********************/
+/*!*******************************!*\
+  !*** ./src/config/general.ts ***!
+  \*******************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const log_levels_1 = __webpack_require__(/*! ./components/support/log.levels */ 2);
+	const log_levels_1 = __webpack_require__(/*! ../components/support/log.levels */ 2);
 	exports.ENABLE_DEBUG_MODE = true;
 	exports.USE_PATHFINDER = true;
 	exports.LOG_LEVEL = log_levels_1.LogLevels.DEBUG;
 	exports.LOG_PRINT_TICK = true;
 	exports.LOG_PRINT_LINES = true;
 	exports.LOG_LOAD_SOURCE_MAP = true;
-	exports.CREEP_ROLES = [
-	    'creep.build',
-	    'creep.harvest',
-	    'creep.upgrade',
-	    'creep.move'
-	];
 
 
 /***/ },
@@ -134,7 +128,7 @@ module.exports =
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Config = __webpack_require__(/*! ../../config */ 1);
+	const Config = __webpack_require__(/*! ../../config/general */ 1);
 	const log_levels_1 = __webpack_require__(/*! ./log.levels */ 2);
 	const stackLineRe = /([^ ]*) \(([^:]*):([0-9]*):([0-9]*)\)/;
 	function resolve(fileLine) {
@@ -3322,48 +3316,150 @@ module.exports =
 
 /***/ },
 /* 16 */
+/*!******************************************!*\
+  !*** ./src/components/classes/Claims.ts ***!
+  \******************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	class Claims {
+	    constructor() {
+	        if (Memory['claims'] == undefined) {
+	            Memory['claims'] = {};
+	        }
+	    }
+	    _getClaimMemory(id) {
+	        if (Memory['claims'][id] == undefined) {
+	            Memory['claims'][id] = { amount: 0, list: {} };
+	        }
+	        return Memory['claims'][id];
+	    }
+	    set(claimer, claimTarget, amount = 1, ticks = 100) {
+	        let claim = this._getClaimMemory(claimTarget.id);
+	        if (claimTarget.store) {
+	            if (claimTarget.store.energy - claim.amount > amount) {
+	                claim.amount += amount;
+	                claim.list[claimer.id] = [Game.time + ticks, amount];
+	                return true;
+	            }
+	        }
+	        else if (claimTarget.amount) {
+	            if (claimTarget.amount - claim.amount > amount) {
+	                claim.amount += amount;
+	                claim.list[claimer.id] = [Game.time + ticks, amount];
+	                return true;
+	            }
+	        }
+	        else {
+	            if (claim.amount == 0) {
+	                claim.amount++;
+	                claim.list[claimer.id] = [Game.time + ticks, 1];
+	                return true;
+	            }
+	        }
+	        return false;
+	    }
+	    remove(claimer, claimTarget) {
+	        let claim = this._getClaimMemory(claimTarget.id);
+	        if (claim.list[claimer.id]) {
+	            let data = claim.list[claimer.id];
+	            claim.amount -= data[1];
+	            delete claim.list[claimer.id];
+	        }
+	    }
+	    isClaimable(claimer, claimTarget, amount) {
+	        let claim = this._getClaimMemory(claimTarget.id);
+	        if (claim.list[claimer.id]) {
+	            return false;
+	        }
+	        if (claimTarget.store) {
+	            if (claimTarget.store.energy - claim.amount > amount) {
+	                return true;
+	            }
+	        }
+	        if (claimTarget.amount) {
+	            if (claimTarget.amount - claim.amount > amount) {
+	                return true;
+	            }
+	        }
+	        else {
+	            return claim.amount == 0;
+	        }
+	    }
+	    clean() {
+	        _(Memory['claims']).eachRight((claim, claimId) => {
+	            if (Game.getObjectById(claimId) == undefined) {
+	                delete Memory['claims'][claimId];
+	            }
+	            else {
+	                _(claim.list).each((claimerId, data) => {
+	                    if (Game.getObjectById(claimerId) == undefined || data[0] < Game.time) {
+	                        claim.amount -= data[0];
+	                        delete claim[claimerId];
+	                    }
+	                });
+	            }
+	        });
+	    }
+	}
+	exports.claims = new Claims();
+	class DummyClaimer {
+	}
+	exports.DummyClaimer = DummyClaimer;
+	exports.dummyClaimer = new DummyClaimer();
+
+
+/***/ },
+/* 17 */
 /*!****************************************!*\
-  !*** ./src/components/classes/room.ts ***!
+  !*** ./src/components/classes/Room.ts ***!
   \****************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	const log_1 = __webpack_require__(/*! ../support/log */ 3);
-	const task_1 = __webpack_require__(/*! ./task */ 17);
-	const RoomConfig = __webpack_require__(/*! ../../config-rooms */ 18);
-	task_1.MixinTaskable(Room);
+	const Task_1 = __webpack_require__(/*! ./Task */ 18);
+	const Claims_1 = __webpack_require__(/*! ./Claims */ 16);
+	const RoomConfig = __webpack_require__(/*! ../../config/room */ 19);
+	const CreepConfig = __webpack_require__(/*! ../../config/creep */ 20);
+	Task_1.MixinTaskable(Room);
 	Room.prototype.run = function () {
-	    if (this.memory.init == undefined) {
-	        this.memory.init = true;
-	        if (this.controller && this.controller.level > 0) {
-	            this.memory.role = 'master';
+	    _init(this);
+	    _runTasks(this);
+	};
+	function _init(self) {
+	    if (self.memory.init == undefined) {
+	        self.memory.init = true;
+	        if (self.controller && self.controller.level > 0) {
+	            self.memory.role = 'master';
 	        }
 	        else {
-	            this.memory.role = 'unowned';
+	            self.memory.role = 'unowned';
 	        }
-	        let tasks = this.getRoleTasks();
+	        let tasks = self.getRoleTasks();
 	        let time = Game.time;
 	        _.forEach(tasks, taskName => {
 	            time++;
-	            this.taskUnshift(time, taskName);
+	            self.taskUnshift(time, taskName);
 	        });
 	    }
-	    let iter = Math.min(10, this.taskCount());
-	    while (iter > 0) {
-	        iter--;
-	        let task = this.taskShift();
+	}
+	function _runTasks(self) {
+	    let doNext = true;
+	    while (doNext) {
+	        doNext = false;
+	        let task = self.taskShift();
 	        if (!task) {
 	            break;
 	        }
 	        if (task.time <= Game.time) {
-	            log_1.log.debug(log_1.log.color('[' + this.name + ']', 'cyan'), 'running task', log_1.log.color(task.name, 'orange'));
-	            this.taskRun(task);
+	            doNext = self.taskRun(task);
 	        }
 	        else {
-	            this.taskPush(task);
+	            self.taskPush(task);
 	        }
 	    }
-	};
+	}
 	Room.prototype.getRole = function () {
 	    let roleName = this.memory.role;
 	    let role = RoomConfig.roles[roleName];
@@ -3375,6 +3471,31 @@ module.exports =
 	Room.prototype.getRoleTasks = function () {
 	    let role = this.getRole();
 	    return RoomConfig.roles[role]['tasks'];
+	};
+	Room.prototype.getSlaves = function () {
+	    if (this.memory['slaves'] == undefined) {
+	        this.memory['slaves'] = {};
+	    }
+	    return this.memory['slaves'];
+	};
+	Room.prototype.getSpawns = function () {
+	    if (this.spawns == undefined) {
+	        this.spawns = [];
+	        this.find(FIND_MY_SPAWNS, {
+	            filter: (s) => { this.spawns.push(s); }
+	        });
+	    }
+	    return this.spawns;
+	};
+	Room.prototype.getAvailableSources = function () {
+	    if (!this.memory.sources) {
+	        return [];
+	    }
+	    let sources = _(this.memory.sources)
+	        .map((sourceId) => { return Game.getObjectById(sourceId); })
+	        .filter((source) => { return source != undefined && Claims_1.claims.isClaimable(Claims_1.dummyClaimer, source, 1); })
+	        .value();
+	    return sources;
 	};
 	Room.prototype.tasks = {};
 	let tasks = Room.prototype.tasks;
@@ -3432,12 +3553,107 @@ module.exports =
 	        }
 	    }
 	};
+	function getRandomName(title) {
+	    let name = '';
+	    do {
+	        name = title + ' ' + CreepConfig.names[Math.floor(Math.random() * CreepConfig.names.length - 1)];
+	    } while (Game.creeps[name]);
+	    return name;
+	}
+	tasks[RoomConfig.TASK_MANAGE_ROOM] = function (task) {
+	    task.time = Game.time + 25;
+	    this.taskPush(task);
+	    let spawnTimer = this.memory.spawnTimer || 0;
+	    let roomLevel = RoomConfig.level[this.memory.level];
+	    let creeps = _.countBy(Game.creeps, 'memory.role');
+	    if (spawnTimer <= Game.time) {
+	        let spawns = _.filter(this.getSpawns(), { spawning: null });
+	        let builder;
+	        if (spawns.length > 0) {
+	            for (let creepType in roomLevel.availableCreeps) {
+	                switch (creepType) {
+	                    case 'allrounder':
+	                        if ((creeps[creepType] || 0) < roomLevel.availableCreeps[creepType]) {
+	                            builder = CreepConfig.Roles[creepType];
+	                        }
+	                        break;
+	                    case 'harvester-energy':
+	                        if (this.memory.sources && (creeps[creepType] || 0) < this.memory.sources.length) {
+	                            builder = CreepConfig.Roles[creepType];
+	                        }
+	                        break;
+	                    default:
+	                        log_1.log.warning('Unrecognized creep class tried to sneak into spawn.');
+	                }
+	                if (builder != undefined) {
+	                    let fn = builder['build'];
+	                    let pattern;
+	                    if (fn) {
+	                        pattern = fn(this.energyAvailable);
+	                    }
+	                    else {
+	                        log_1.log.warning(creepType, 'is missing a builder function');
+	                    }
+	                    let mem = { role: creepType, queue: [] };
+	                    _.each(builder['tasks'], taskName => {
+	                        let task = { name: taskName, time: Game.time };
+	                        mem.queue.push(task);
+	                    });
+	                    spawns[0].createCreep(pattern, getRandomName(builder['name']), mem);
+	                    break;
+	                }
+	            }
+	        }
+	    }
+	    this.taskUnshift(1, '_scanResources');
+	};
+	tasks['_scanResources'] = function () {
+	    let resources = [];
+	    this.find(FIND_MY_STRUCTURES, {
+	        filter: (s) => {
+	            if (s.structureType == STRUCTURE_CONTAINER) {
+	                resources.push(s);
+	            }
+	        }
+	    });
+	    this.find(FIND_DROPPED_RESOURCES, {
+	        filter: (r) => {
+	            resources.push(r);
+	        }
+	    });
+	    this.memory.resources = resources;
+	    return true;
+	};
+	tasks[RoomConfig.TASK_CHECK_ROOM_LEVEL] = function (task) {
+	    task.time = Game.time + 200;
+	    let currentLevel = this.memory.level || 0;
+	    let creeps = _.countBy(Game.creeps, 'role');
+	    let energy = this.energyAvailable + (this.storage ? this.storage.store.energy : 0);
+	    let extensions = 0;
+	    let newLevel = -1;
+	    for (let v of RoomConfig.level) {
+	        if (!v.require.creeps(creeps) ||
+	            !(v.require.energy <= energy) ||
+	            !(v.require.extensions <= extensions)) {
+	            break;
+	        }
+	        newLevel++;
+	    }
+	    if (newLevel > currentLevel) {
+	        log_1.log.info(log_1.log.color('[' + this.name + ']', 'cyan'), 'reached', log_1.log.color(RoomConfig.level[newLevel].name, 'brown'), 'status');
+	    }
+	    else if (newLevel < currentLevel) {
+	        log_1.log.info(log_1.log.color('[' + this.name + ']', 'cyan'), 'lost it\'s status and is now', log_1.log.color(RoomConfig.level[newLevel].name, 'brown'));
+	    }
+	    this.memory.level = newLevel;
+	    this.taskPush(task);
+	};
 
 
 /***/ },
-/* 17 */
+/* 18 */
 /*!****************************************!*\
-  !*** ./src/components/classes/task.ts ***!
+  !*** ./src/components/classes/Task.ts ***!
   \****************************************/
 /***/ function(module, exports, __webpack_require__) {
 
@@ -3527,10 +3743,10 @@ module.exports =
 
 
 /***/ },
-/* 18 */
-/*!*****************************!*\
-  !*** ./src/config-rooms.ts ***!
-  \*****************************/
+/* 19 */
+/*!****************************!*\
+  !*** ./src/config/room.ts ***!
+  \****************************/
 /***/ function(module, exports) {
 
 	"use strict";
@@ -3543,7 +3759,7 @@ module.exports =
 	exports.TASK_CHECK_ROOM_LEVEL = 'checkRoomLevel';
 	exports.roles = {
 	    'master': {
-	        'tasks': [exports.TASK_CHECK_SOURCES, exports.TASK_MANAGE_ROOM, exports.TASK_SCOUT_ROOMS]
+	        'tasks': [exports.TASK_CHECK_ROOM_LEVEL, exports.TASK_CHECK_SOURCES, exports.TASK_MANAGE_ROOM, exports.TASK_SCOUT_ROOMS]
 	    },
 	    'slave': {
 	        'tasks': [exports.TASK_CHECK_SOURCES, exports.TASK_MANAGE_SLAVE]
@@ -3580,185 +3796,1397 @@ module.exports =
 
 
 /***/ },
-/* 19 */
-/*!*****************************************!*\
-  !*** ./src/components/classes/creep.ts ***!
-  \*****************************************/
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	const Config = __webpack_require__(/*! ../../config */ 1);
-	const task_1 = __webpack_require__(/*! ./task */ 17);
-	const config_creeps_1 = __webpack_require__(/*! ../../config-creeps */ 20);
-	task_1.MixinTaskable(Creep);
-	Creep.prototype.run = function () {
-	    let doNext = true;
-	    while (doNext) {
-	        doNext = false;
-	        let task = this.taskShift();
-	        if (task && task.time >= Game.time) {
-	            doNext = this.taskRun(task);
-	        }
-	        else if (task) {
-	            this.taskUnshift(task);
-	        }
-	    }
-	};
-	Creep.prototype.getRole = function () {
-	    let roleName = this.memory.role;
-	    let role = config_creeps_1.Roles[roleName];
-	    if (!role) {
-	        throw "Creep without role: " + this.name;
-	    }
-	    return roleName;
-	};
-	Creep.prototype.getRoleTasks = function () {
-	    let role = this.getRole();
-	    let roleTasks = config_creeps_1.Roles[role]['tasks'];
-	    return roleTasks;
-	};
-	Creep.prototype.tasks = {};
-	for (let role of Config.CREEP_ROLES) {
-	    __webpack_require__(/*! ../roles */ 21)("./" + role).register();
-	}
-
-
-/***/ },
 /* 20 */
-/*!******************************!*\
-  !*** ./src/config-creeps.ts ***!
-  \******************************/
+/*!*****************************!*\
+  !*** ./src/config/creep.ts ***!
+  \*****************************/
 /***/ function(module, exports) {
 
 	"use strict";
+	exports.Roles = {};
 	exports.Roles = {
 	    'allrounder': {
-	        'tasks': ['h_search', 'h_mine'],
+	        'name': 'Worker',
+	        'tasks': ['search_source'],
+	        'build': (energy) => {
+	            let pattern = [WORK, CARRY, MOVE, MOVE];
+	            let cost = 250;
+	            let body = { carry: 1, work: 1 };
+	            while (cost + 100 <= energy) {
+	                let delta = energy - cost;
+	                switch (true) {
+	                    case delta >= 150 && body.work < body.carry * 3:
+	                        cost += 150;
+	                        body.work++;
+	                        pattern.push(CARRY, MOVE);
+	                        break;
+	                    case delta >= 100 && body.carry < 20:
+	                        cost += 100;
+	                        body.carry++;
+	                        pattern.push(CARRY, MOVE);
+	                        break;
+	                }
+	            }
+	            return pattern;
+	        },
 	    },
 	    'harvester-energy': {
-	        'tasks': ['h_search', 'h_mine'],
+	        'name': 'Farmer',
+	        'tasks': ['search_source'],
+	        'build': (energy) => {
+	            let pattern = [WORK, WORK, CARRY, MOVE];
+	            let cost = 300;
+	            let body = { work: 2, move: 1 };
+	            while (cost + 100 <= energy) {
+	                let delta = energy - cost;
+	                switch (true) {
+	                    case delta >= 100 && body.work < 5:
+	                        cost += 100;
+	                        body.work++;
+	                        pattern.push(WORK);
+	                        break;
+	                    case delta >= 50 && body.move < body.work:
+	                        cost += 50;
+	                        body.move++;
+	                        pattern.push(MOVE);
+	                    default:
+	                        cost = energy;
+	                        break;
+	                }
+	            }
+	            return pattern;
+	        },
 	    },
-	    'harvester-extractor': {},
-	    'manager': {},
-	    'carrier': {},
-	    'updater': {},
-	    'builder': {},
-	    'scout': {},
-	    'attack-range': {},
-	    'attack-close': {},
-	    'attack-heal': {}
+	    'harvester-extractor': {
+	        'name': 'Miner',
+	        'tasks': [],
+	        'build': null,
+	    },
+	    'manager': {
+	        'name': 'Distributor',
+	        'tasks': [],
+	        'build': null,
+	    },
+	    'carrier': {
+	        'name': 'Hauler',
+	        'tasks': [],
+	        'build': null,
+	    },
+	    'updater': {
+	        'name': 'Upgrader',
+	        'tasks': [],
+	        'build': null,
+	    },
+	    'builder': {
+	        'name': 'Builder',
+	        'tasks': [],
+	        'build': null,
+	    },
+	    'scout': {
+	        'name': 'Scout',
+	        'tasks': [],
+	        'build': null,
+	    },
+	    'attack-range': {
+	        'name': 'Puncher',
+	        'tasks': [],
+	        'build': null,
+	    },
+	    'attack-close': {
+	        'name': 'Shooter',
+	        'tasks': [],
+	        'build': null,
+	    },
+	    'attack-heal': {
+	        'name': 'Healer',
+	        'tasks': [],
+	        'build': null,
+	    }
 	};
+	exports.names = [
+	    'Abdalla', 'Ackiss', 'Aloise', 'Bamba', 'Barby', 'Baute', 'Beauchemin', 'Benalcazar', 'Berdusco', 'Bottemiller', 'Bradtke', 'Brunache',
+	    'Buoy', 'Burgos', 'Caffarelli', 'Caliva', 'Carabeo', 'Cavicchi', 'Ceric', 'Clancey', 'Cloutier', 'Cornacchione', 'Corriveau', 'Daniely',
+	    'Davito', 'Dayoub', 'Delucia', 'Demolle', 'Descant', 'Deyton', 'Dietiker', 'Doust', 'Dubbert', 'Dubner', 'Eichele', 'Ellerbee',
+	    'Ellicott', 'Elsberry', 'Elze', 'Facchiano', 'Falzone', 'Farraj', 'Fenrich', 'Finer', 'Flamini', 'Foon', 'Frump', 'Galletto',
+	    'Gascoyne', 'Germond', 'Gigous', 'Ginocchio', 'Goldrick', 'Griser', 'Guller', 'Hassebrock', 'Hattman', 'Heaver', 'Hed', 'Heggestad',
+	    'Hopley', 'Hovinga', 'Ingran', 'Jeun', 'Kacprzak', 'Kasey', 'Klemetson', 'Koetter', 'Kollmann', 'Kozikowski', 'Kremsreiter', 'Krobot',
+	    'Kropp', 'Kruggel', 'Lagrimas', 'Lard', 'Leonards', 'Lindaas', 'Llopiz', 'Longfield', 'Ludwigson', 'Mastej', 'Maunz', 'Mazzie',
+	    'McEntire', 'McKelroy', 'McQuillen', 'Mellado', 'Mercante', 'Merkle', 'Minaudo', 'Monnahan', 'Mono', 'Murria', 'Murto', 'Napierski',
+	    'Narey', 'Neisinger', 'Nnaji', 'Oertel', 'Ogrinc', 'Olesiak', 'Pavelek', 'Petras', 'Philipps', 'Piehler', 'Prudente', 'Pucilowski',
+	    'Pustay', 'Quinto', 'Rasavong', 'Riemer', 'Rische', 'Rogler', 'Santalucia', 'Sapigao', 'Sapir', 'Sarnes', 'Scannelli', 'Sewak',
+	    'Shedden', 'Silano', 'Skeene', 'Skeete', 'Skonberg', 'Sluder', 'Smeltzer', 'Stangelo', 'Stauch', 'Stauts', 'Streich', 'Sturgeon',
+	    'Sulik', 'Summerour', 'Thake', 'Tumbarello', 'Uvalle', 'Vanhoose', 'Wagenblast', 'Waide', 'Waigand', 'Weigel', 'Wilds', 'Witsman',
+	    'Yang', 'Yanus', 'Zadra', 'Zahar', 'Zdanis', 'Zegar',
+	];
 
 
 /***/ },
 /* 21 */
-/*!***************************************!*\
-  !*** ./src/components/roles ^\.\/.*$ ***!
-  \***************************************/
+/*!*****************************************!*\
+  !*** ./src/components/classes/Creep.ts ***!
+  \*****************************************/
 /***/ function(module, exports, __webpack_require__) {
 
-	var map = {
-		"./creep.build": 22,
-		"./creep.build.ts": 22,
-		"./creep.harvest": 23,
-		"./creep.harvest.ts": 23,
-		"./creep.move": 24,
-		"./creep.move.ts": 24,
-		"./creep.upgrade": 25,
-		"./creep.upgrade.ts": 25
+	"use strict";
+	const creep_1 = __webpack_require__(/*! ../../config/creep */ 20);
+	const btrees_1 = __webpack_require__(/*! ../../config/btrees */ 22);
+	const creep_bt_1 = __webpack_require__(/*! ../roles/creep.bt */ 23);
+	Creep.prototype.run = function () {
+	    if (this.spawning) {
+	        return;
+	    }
+	    let roleName = this.getRole();
+	    if (roleTrees[roleName] == undefined) {
+	        throw 'Role tree not found ' + roleName;
+	    }
+	    let blackboard = new creep_bt_1.Blackboard(this.memory);
+	    roleTrees[roleName].tick(this, blackboard);
 	};
-	function webpackContext(req) {
-		return __webpack_require__(webpackContextResolve(req));
+	Creep.prototype.getRole = function () {
+	    let roleName = this.memory.role;
+	    let role = creep_1.Roles[roleName];
+	    if (role == undefined) {
+	        throw 'Creep without role: ' + this.name;
+	    }
+	    return roleName;
 	};
-	function webpackContextResolve(req) {
-		return map[req] || (function() { throw new Error("Cannot find module '" + req + "'.") }());
+	Creep.prototype.getTarget = function () {
+	    if (this.memory.target) {
+	        let target = Game.getObjectById(this.memory.target);
+	        if (target) {
+	            return target;
+	        }
+	    }
+	    if (this.memory.targetPos) {
+	        return new RoomPosition(this.memory.targetPos.x, this.memory.targetPos.y, this.memory.targetPos.roomName);
+	    }
+	    return null;
 	};
-	webpackContext.keys = function webpackContextKeys() {
-		return Object.keys(map);
+	let roleTrees = {
+	    'allrounder': creep_bt_1.loadTree(btrees_1.creepBTree.allrounder, creep_bt_1.customNodes),
+	    'harvester-energy': creep_bt_1.loadTree(btrees_1.creepBTree['harvester-energy'], creep_bt_1.customNodes),
 	};
-	webpackContext.resolve = webpackContextResolve;
-	module.exports = webpackContext;
-	webpackContext.id = 21;
+	roleTrees['allrounder'].id = 'allrounder';
+	roleTrees['harvester-energy'].id = 'harvester-energy';
 
 
 /***/ },
 /* 22 */
-/*!*********************************************!*\
-  !*** ./src/components/roles/creep.build.ts ***!
-  \*********************************************/
+/*!******************************!*\
+  !*** ./src/config/btrees.ts ***!
+  \******************************/
 /***/ function(module, exports) {
 
 	"use strict";
-	function register() {
-	}
-	exports.register = register;
+	exports.creepBTree = {
+	    'allrounder': {
+	        "title": "A Behavior Tree",
+	        "description": "",
+	        "root": "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d",
+	        "display": {
+	            "camera_x": 367,
+	            "camera_y": 642,
+	            "camera_z": 1.25,
+	            "x": -64,
+	            "y": -48
+	        },
+	        "properties": {},
+	        "nodes": {
+	            "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d": {
+	                "id": "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d",
+	                "name": "MemSequence",
+	                "title": "MemSequence",
+	                "description": "",
+	                "display": {
+	                    "x": 16,
+	                    "y": -48
+	                },
+	                "parameters": {},
+	                "properties": {},
+	                "children": [
+	                    "e211c7a6-ec74-4493-8d39-a5f37e5d8918",
+	                    "097ebed6-e4c7-4742-8b25-cd9960416107",
+	                    "f3b91bd2-3499-47a0-8855-cfbc258f57fe",
+	                    "463eb1b3-3384-4d87-84d3-78a08e3d01ea",
+	                    "ff57bb17-1f99-4dc3-bd34-e747308dab40",
+	                    "49d543e5-9148-4c6a-9196-52414ffb3bdd",
+	                    "574b6a71-81dc-4361-893c-49c9ee118dcb"
+	                ]
+	            },
+	            "e211c7a6-ec74-4493-8d39-a5f37e5d8918": {
+	                "id": "e211c7a6-ec74-4493-8d39-a5f37e5d8918",
+	                "name": "SearchSources",
+	                "title": "SearchSources",
+	                "description": "",
+	                "display": {
+	                    "x": 272,
+	                    "y": -320
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "097ebed6-e4c7-4742-8b25-cd9960416107": {
+	                "id": "097ebed6-e4c7-4742-8b25-cd9960416107",
+	                "name": "HasTarget",
+	                "title": "HasTarget",
+	                "description": "",
+	                "display": {
+	                    "x": 272,
+	                    "y": -272
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "04bd105b-d19f-4548-89d7-3e35584b03b6": {
+	                "id": "04bd105b-d19f-4548-89d7-3e35584b03b6",
+	                "name": "FindPath",
+	                "title": "FindPath",
+	                "description": "",
+	                "display": {
+	                    "x": 640,
+	                    "y": -208
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "06f63f43-a3ed-4710-8ebb-2c8077e9ca06": {
+	                "id": "06f63f43-a3ed-4710-8ebb-2c8077e9ca06",
+	                "name": "Move",
+	                "title": "Move",
+	                "description": "",
+	                "display": {
+	                    "x": 640,
+	                    "y": -160
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "49d543e5-9148-4c6a-9196-52414ffb3bdd": {
+	                "id": "49d543e5-9148-4c6a-9196-52414ffb3bdd",
+	                "name": "Harvest",
+	                "title": "Harvest",
+	                "description": "",
+	                "display": {
+	                    "x": 272,
+	                    "y": -48
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "463eb1b3-3384-4d87-84d3-78a08e3d01ea": {
+	                "id": "463eb1b3-3384-4d87-84d3-78a08e3d01ea",
+	                "name": "RepeatUntilSuccess",
+	                "title": "Repeat Until Success",
+	                "description": "",
+	                "display": {
+	                    "x": 304,
+	                    "y": -160
+	                },
+	                "parameters": {
+	                    "maxLoop": 3
+	                },
+	                "properties": {},
+	                "child": "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d"
+	            },
+	            "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d": {
+	                "id": "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d",
+	                "name": "MemSequence",
+	                "title": "MemSequence",
+	                "description": "",
+	                "display": {
+	                    "x": 480,
+	                    "y": -160
+	                },
+	                "parameters": {},
+	                "properties": {},
+	                "children": [
+	                    "04bd105b-d19f-4548-89d7-3e35584b03b6",
+	                    "06f63f43-a3ed-4710-8ebb-2c8077e9ca06"
+	                ]
+	            },
+	            "4a8d1dd1-3d2f-4197-815b-3efd6d227970": {
+	                "id": "4a8d1dd1-3d2f-4197-815b-3efd6d227970",
+	                "name": "Carry",
+	                "title": "Carry",
+	                "description": "",
+	                "display": {
+	                    "x": 400,
+	                    "y": 0
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "574b6a71-81dc-4361-893c-49c9ee118dcb": {
+	                "id": "574b6a71-81dc-4361-893c-49c9ee118dcb",
+	                "name": "MemSequence",
+	                "title": "MemSequence",
+	                "description": "",
+	                "display": {
+	                    "x": 224,
+	                    "y": 0
+	                },
+	                "parameters": {},
+	                "properties": {},
+	                "children": [
+	                    "4a8d1dd1-3d2f-4197-815b-3efd6d227970"
+	                ]
+	            },
+	            "f3b91bd2-3499-47a0-8855-cfbc258f57fe": {
+	                "id": "f3b91bd2-3499-47a0-8855-cfbc258f57fe",
+	                "name": "Claim",
+	                "title": "Claim",
+	                "description": "",
+	                "display": {
+	                    "x": 272,
+	                    "y": -224
+	                },
+	                "parameters": {
+	                    "target": "target"
+	                },
+	                "properties": {}
+	            },
+	            "ff57bb17-1f99-4dc3-bd34-e747308dab40": {
+	                "id": "ff57bb17-1f99-4dc3-bd34-e747308dab40",
+	                "name": "Unclaim",
+	                "title": "Unclaim",
+	                "description": "",
+	                "display": {
+	                    "x": 272,
+	                    "y": -96
+	                },
+	                "parameters": {
+	                    "target": "target"
+	                },
+	                "properties": {}
+	            }
+	        },
+	        "custom_nodes": [
+	            {
+	                "name": "SearchSources",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "HasTarget",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "FindPath",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Move",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Harvest",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Carry",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Claim",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Unclaim",
+	                "title": "",
+	                "category": "action"
+	            }
+	        ]
+	    },
+	    'harvester-energy': {
+	        "title": "A Behavior Tree",
+	        "description": "",
+	        "root": "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d",
+	        "display": {
+	            "camera_x": 579,
+	            "camera_y": 652,
+	            "camera_z": 1.25,
+	            "x": -64,
+	            "y": -48
+	        },
+	        "properties": {},
+	        "nodes": {
+	            "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d": {
+	                "id": "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d",
+	                "name": "MemSequence",
+	                "title": "MemSequence",
+	                "description": "",
+	                "display": {
+	                    "x": 16,
+	                    "y": -48
+	                },
+	                "parameters": {},
+	                "properties": {},
+	                "children": [
+	                    "e211c7a6-ec74-4493-8d39-a5f37e5d8918",
+	                    "097ebed6-e4c7-4742-8b25-cd9960416107",
+	                    "f3b91bd2-3499-47a0-8855-cfbc258f57fe",
+	                    "463eb1b3-3384-4d87-84d3-78a08e3d01ea",
+	                    "ba79a9eb-5b33-4da5-9db1-aded73ea3ee0"
+	                ]
+	            },
+	            "e211c7a6-ec74-4493-8d39-a5f37e5d8918": {
+	                "id": "e211c7a6-ec74-4493-8d39-a5f37e5d8918",
+	                "name": "SearchSources",
+	                "title": "SearchSources",
+	                "description": "",
+	                "display": {
+	                    "x": 272,
+	                    "y": -320
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "097ebed6-e4c7-4742-8b25-cd9960416107": {
+	                "id": "097ebed6-e4c7-4742-8b25-cd9960416107",
+	                "name": "HasTarget",
+	                "title": "HasTarget",
+	                "description": "",
+	                "display": {
+	                    "x": 272,
+	                    "y": -272
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "04bd105b-d19f-4548-89d7-3e35584b03b6": {
+	                "id": "04bd105b-d19f-4548-89d7-3e35584b03b6",
+	                "name": "FindPath",
+	                "title": "FindPath",
+	                "description": "",
+	                "display": {
+	                    "x": 640,
+	                    "y": -208
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "06f63f43-a3ed-4710-8ebb-2c8077e9ca06": {
+	                "id": "06f63f43-a3ed-4710-8ebb-2c8077e9ca06",
+	                "name": "Move",
+	                "title": "Move",
+	                "description": "",
+	                "display": {
+	                    "x": 640,
+	                    "y": -160
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "49d543e5-9148-4c6a-9196-52414ffb3bdd": {
+	                "id": "49d543e5-9148-4c6a-9196-52414ffb3bdd",
+	                "name": "Harvest",
+	                "title": "Harvest",
+	                "description": "",
+	                "display": {
+	                    "x": 640,
+	                    "y": -112
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "463eb1b3-3384-4d87-84d3-78a08e3d01ea": {
+	                "id": "463eb1b3-3384-4d87-84d3-78a08e3d01ea",
+	                "name": "RepeatUntilSuccess",
+	                "title": "Repeat Until Success",
+	                "description": "",
+	                "display": {
+	                    "x": 304,
+	                    "y": -160
+	                },
+	                "parameters": {
+	                    "maxLoop": 3
+	                },
+	                "properties": {},
+	                "child": "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d"
+	            },
+	            "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d": {
+	                "id": "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d",
+	                "name": "MemSequence",
+	                "title": "MemSequence",
+	                "description": "",
+	                "display": {
+	                    "x": 480,
+	                    "y": -160
+	                },
+	                "parameters": {},
+	                "properties": {},
+	                "children": [
+	                    "04bd105b-d19f-4548-89d7-3e35584b03b6",
+	                    "06f63f43-a3ed-4710-8ebb-2c8077e9ca06"
+	                ]
+	            },
+	            "f3b91bd2-3499-47a0-8855-cfbc258f57fe": {
+	                "id": "f3b91bd2-3499-47a0-8855-cfbc258f57fe",
+	                "name": "Claim",
+	                "title": "Claim",
+	                "description": "",
+	                "display": {
+	                    "x": 272,
+	                    "y": -224
+	                },
+	                "parameters": {
+	                    "target": "target"
+	                },
+	                "properties": {}
+	            },
+	            "ba79a9eb-5b33-4da5-9db1-aded73ea3ee0": {
+	                "id": "ba79a9eb-5b33-4da5-9db1-aded73ea3ee0",
+	                "name": "Repeater",
+	                "title": "Repeater",
+	                "description": "",
+	                "display": {
+	                    "x": 256,
+	                    "y": -64
+	                },
+	                "parameters": {
+	                    "maxLoop": "1e999"
+	                },
+	                "properties": {},
+	                "child": "e2844393-cf37-42f4-83ee-7b57dd4d9359"
+	            },
+	            "7dd677a2-8de4-44c7-9d6a-59b5b43f3247": {
+	                "id": "7dd677a2-8de4-44c7-9d6a-59b5b43f3247",
+	                "name": "StoreNear",
+	                "title": "Store",
+	                "description": "",
+	                "display": {
+	                    "x": 640,
+	                    "y": -64
+	                },
+	                "parameters": {},
+	                "properties": {}
+	            },
+	            "e2844393-cf37-42f4-83ee-7b57dd4d9359": {
+	                "id": "e2844393-cf37-42f4-83ee-7b57dd4d9359",
+	                "name": "MemSequence",
+	                "title": "MemSequence",
+	                "description": "",
+	                "display": {
+	                    "x": 464,
+	                    "y": -64
+	                },
+	                "parameters": {},
+	                "properties": {},
+	                "children": [
+	                    "49d543e5-9148-4c6a-9196-52414ffb3bdd",
+	                    "7dd677a2-8de4-44c7-9d6a-59b5b43f3247"
+	                ]
+	            }
+	        },
+	        "custom_nodes": [
+	            {
+	                "name": "SearchSources",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "HasTarget",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "FindPath",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Move",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Harvest",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Carry",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Claim",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "Unclaim",
+	                "title": "",
+	                "category": "action"
+	            },
+	            {
+	                "name": "StoreNear",
+	                "title": "Store",
+	                "category": "action"
+	            }
+	        ]
+	    },
+	};
 
 
 /***/ },
 /* 23 */
-/*!***********************************************!*\
-  !*** ./src/components/roles/creep.harvest.ts ***!
-  \***********************************************/
-/***/ function(module, exports) {
+/*!******************************************!*\
+  !*** ./src/components/roles/creep.bt.ts ***!
+  \******************************************/
+/***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	function register() {
-	    let tasks = Creep.prototype.tasks;
-	    tasks['h_mine'] = function (task) {
-	        let target = Game.getObjectById(task.data);
-	        if (!target) {
-	            return;
+	const b3 = __webpack_require__(/*! ../../lib/behavior3ts */ 24);
+	const Claims_1 = __webpack_require__(/*! ../classes/Claims */ 16);
+	var customNodes;
+	(function (customNodes) {
+	    const Action = b3.Action;
+	    const STATUS = b3.STATUS;
+	    class SearchSources extends Action {
+	        tick(tick) {
+	            let creep = tick.target;
+	            let sources = creep.room.getAvailableSources();
+	            let source;
+	            if (sources.length > 0) {
+	                source = creep.pos.findClosestByPath(sources);
+	                creep.memory.target = source.id;
+	                return STATUS.SUCCESS;
+	            }
+	            return STATUS.FAILURE;
 	        }
-	        this.taskUnshift(task);
-	    };
-	    tasks['h_search'] = function (task) {
-	        task.time = Game.time + 10;
-	        this.taskUnshift(task);
-	    };
+	    }
+	    customNodes.SearchSources = SearchSources;
+	    class HasTarget extends Action {
+	        tick(tick) {
+	            if (tick.target.getTarget()) {
+	                return STATUS.SUCCESS;
+	            }
+	            return STATUS.FAILURE;
+	        }
+	    }
+	    customNodes.HasTarget = HasTarget;
+	    class FindPath extends Action {
+	        tick(tick) {
+	            let creep = tick.target;
+	            let target = creep.getTarget();
+	            if (target == undefined) {
+	                return STATUS.FAILURE;
+	            }
+	            let path = creep.pos.findPathTo(target);
+	            if (path.length == 0) {
+	                return STATUS.FAILURE;
+	            }
+	            creep.memory.path = Room.serializePath(path);
+	            return STATUS.SUCCESS;
+	        }
+	    }
+	    customNodes.FindPath = FindPath;
+	    class Move extends Action {
+	        tick(tick) {
+	            if (tick.target.memory.path == undefined) {
+	                return STATUS.FAILURE;
+	            }
+	            let target = tick.target.getTarget();
+	            if (target == undefined) {
+	                return STATUS.FAILURE;
+	            }
+	            if (tick.target.pos.getRangeTo(target) < 2) {
+	                return STATUS.SUCCESS;
+	            }
+	            if (tick.target.moveByPath(tick.target.memory.path) != OK) {
+	                return STATUS.FAILURE;
+	            }
+	            return STATUS.RUNNING;
+	        }
+	    }
+	    customNodes.Move = Move;
+	    class Harvest extends Action {
+	        tick(tick) {
+	            let creep = tick.target;
+	            if (creep.carry.energy == creep.carryCapacity) {
+	                return STATUS.SUCCESS;
+	            }
+	            let target = creep.getTarget();
+	            if (target instanceof Source) {
+	                if (creep.harvest(target) != OK) {
+	                    return STATUS.FAILURE;
+	                }
+	            }
+	            else {
+	                return STATUS.FAILURE;
+	            }
+	            return STATUS.RUNNING;
+	        }
+	    }
+	    customNodes.Harvest = Harvest;
+	    class Claim extends Action {
+	        constructor(props, id) {
+	            super(props, id);
+	            this.claimTarget = props['target'];
+	        }
+	        tick(tick) {
+	            let creep = tick.target;
+	            let target = Game.getObjectById(creep.memory[this.claimTarget]);
+	            if (target == undefined) {
+	                return STATUS.ERROR;
+	            }
+	            return Claims_1.claims.set(creep, target, creep.carryCapacity - creep.carry.energy, target instanceof Source ? creep.ticksToLive : 100) ? STATUS.SUCCESS : STATUS.FAILURE;
+	        }
+	    }
+	    customNodes.Claim = Claim;
+	    class Unclaim extends Action {
+	        constructor(props, id) {
+	            super(props, id);
+	            this.claimTarget = props['target'];
+	        }
+	        tick(tick) {
+	            let creep = tick.target;
+	            let target = Game.getObjectById(creep.memory[this.claimTarget]);
+	            if (target == undefined) {
+	                return STATUS.ERROR;
+	            }
+	            Claims_1.claims.remove(creep, target);
+	            return STATUS.SUCCESS;
+	        }
+	    }
+	    customNodes.Unclaim = Unclaim;
+	    class Carry extends Action {
+	        tick(tick) {
+	            tick;
+	            return b3.STATUS.SUCCESS;
+	        }
+	    }
+	    customNodes.Carry = Carry;
+	    class StoreNear extends Action {
+	        tick(tick) {
+	            let creep = tick.target;
+	            let opts = { filter: (s) => { return s.structureType == STRUCTURE_CONTAINER && _.sum(s.store) < s.storeCapacity; } };
+	            let container = creep.pos.findInRange(FIND_STRUCTURES, 1, opts);
+	            if (container.length > 0) {
+	                creep.transfer(container[0], RESOURCE_ENERGY);
+	            }
+	            else {
+	                creep.drop(RESOURCE_ENERGY);
+	            }
+	            return b3.STATUS.SUCCESS;
+	        }
+	    }
+	    customNodes.StoreNear = StoreNear;
+	})(customNodes = exports.customNodes || (exports.customNodes = {}));
+	class Blackboard {
+	    constructor(mem) {
+	        if (mem['blackboard'] == undefined) {
+	            mem['blackboard'] = {};
+	        }
+	        this._memory = mem['blackboard'];
+	        if (this._memory.tree == undefined) {
+	            this._memory.tree = {};
+	        }
+	        if (this._memory.base == undefined) {
+	            this._memory.base = {};
+	        }
+	    }
+	    _getTreeMemory(treeScope) {
+	        if (this._memory.tree[treeScope] == undefined) {
+	            this._memory.tree[treeScope] = {};
+	        }
+	        return this._memory.tree[treeScope];
+	    }
+	    _getNodeMemory(mem, nodeScope) {
+	        if (mem[nodeScope] == undefined) {
+	            mem[nodeScope] = {};
+	        }
+	        return mem[nodeScope];
+	    }
+	    _getMemory(treeScope, nodeScope) {
+	        if (treeScope) {
+	            var memory = this._getTreeMemory(treeScope);
+	            if (nodeScope) {
+	                return this._getNodeMemory(memory, nodeScope);
+	            }
+	            return memory;
+	        }
+	        return this._memory.base;
+	    }
+	    set(key, value, treeScope, nodeScope) {
+	        this._getMemory(treeScope ? treeScope.toString() : undefined, nodeScope ? nodeScope.toString() : undefined)[key] = value;
+	    }
+	    get(key, treeScope, nodeScope) {
+	        return this._getMemory(treeScope ? treeScope.toString() : undefined, nodeScope ? nodeScope.toString() : undefined)[key];
+	    }
 	}
-	exports.register = register;
+	exports.Blackboard = Blackboard;
+	function loadTree(data, names = {}) {
+	    let tree = new b3.BehaviorTree();
+	    let nodes = {};
+	    let id, spec, node;
+	    for (id in data.nodes) {
+	        spec = data.nodes[id];
+	        let Cls;
+	        if (spec.name in names) {
+	            Cls = names[spec.name];
+	        }
+	        else if (spec.name in b3) {
+	            Cls = b3[spec.name];
+	        }
+	        else {
+	            throw new EvalError('BehaviorTree.load: Invalid node name "' + spec.name + '".');
+	        }
+	        node = new Cls(spec.parameters, spec.id);
+	        nodes[id] = node;
+	    }
+	    for (id in data.nodes) {
+	        spec = data.nodes[id];
+	        node = nodes[id];
+	        switch (node.category) {
+	            case b3.CATEGORY.COMPOSITE:
+	                for (let i = 0; i < spec.children.length; i++) {
+	                    let cid = spec.children[i];
+	                    node.children.push(cid);
+	                }
+	                break;
+	            case b3.CATEGORY.DECORATOR:
+	                let cid = spec.child;
+	                node.child = cid;
+	                break;
+	            default:
+	                break;
+	        }
+	    }
+	    tree.root = data.root;
+	    tree.nodes = nodes;
+	    return tree;
+	}
+	exports.loadTree = loadTree;
 
 
 /***/ },
 /* 24 */
-/*!********************************************!*\
-  !*** ./src/components/roles/creep.move.ts ***!
-  \********************************************/
-/***/ function(module, exports) {
+/*!**************************************!*\
+  !*** ./src/lib/behavior3ts/index.ts ***!
+  \**************************************/
+/***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	function register() {
-	    let tasks = Creep.prototype.tasks;
-	    tasks['m_move_to'] = function (task) {
-	        let data = task.data;
-	        let target = Game.getObjectById(data.target);
-	        if (!target) {
-	            return;
-	        }
-	        if (this.pos.getRangeTo(target.pos) > data.range) {
-	            this.moveByPath(data.path);
-	        }
-	        else {
-	            return true;
-	        }
-	        this.taskUnshift(task);
-	        return false;
-	    };
+	function __export(m) {
+	    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 	}
-	exports.register = register;
+	__export(__webpack_require__(/*! ./helper */ 25));
+	__export(__webpack_require__(/*! ./core/BaseNode */ 26));
+	__export(__webpack_require__(/*! ./core/BehaviorTree */ 27));
+	__export(__webpack_require__(/*! ./core/Tick */ 28));
+	__export(__webpack_require__(/*! ./core/Types */ 29));
+	__export(__webpack_require__(/*! ./actions/Wait */ 30));
+	__export(__webpack_require__(/*! ./composites/MemPriority */ 31));
+	__export(__webpack_require__(/*! ./composites/MemSequence */ 32));
+	__export(__webpack_require__(/*! ./decorators/Inverter */ 33));
+	__export(__webpack_require__(/*! ./decorators/Limiter */ 34));
+	__export(__webpack_require__(/*! ./decorators/RepeatUntilSuccess */ 35));
+	__export(__webpack_require__(/*! ./decorators/RepeatUntilFailure */ 36));
+	__export(__webpack_require__(/*! ./decorators/Repeater */ 37));
 
 
 /***/ },
 /* 25 */
-/*!***********************************************!*\
-  !*** ./src/components/roles/creep.upgrade.ts ***!
-  \***********************************************/
+/*!***************************************!*\
+  !*** ./src/lib/behavior3ts/helper.ts ***!
+  \***************************************/
 /***/ function(module, exports) {
 
 	"use strict";
-	function register() {
+	function createUUID() {
+	    let s = [];
+	    let hexDigits = '0123456789abcdef';
+	    for (let i = 0; i < 36; i++) {
+	        s[i] = hexDigits.substr(Math.floor(Math.random() * 0x10), 1);
+	    }
+	    s[14] = '4';
+	    s[19] = hexDigits.substr((s[19] & 0x3) | 0x8, 1);
+	    s[8] = s[13] = s[18] = s[23] = '-';
+	    let uuid = s.join('');
+	    return uuid;
 	}
-	exports.register = register;
+	exports.createUUID = createUUID;
+	exports.VERSION = '0.1.0';
+	var STATUS;
+	(function (STATUS) {
+	    STATUS[STATUS["SUCCESS"] = 0] = "SUCCESS";
+	    STATUS[STATUS["FAILURE"] = 1] = "FAILURE";
+	    STATUS[STATUS["RUNNING"] = 2] = "RUNNING";
+	    STATUS[STATUS["ERROR"] = 3] = "ERROR";
+	})(STATUS = exports.STATUS || (exports.STATUS = {}));
+	var CATEGORY;
+	(function (CATEGORY) {
+	    CATEGORY[CATEGORY["COMPOSITE"] = 0] = "COMPOSITE";
+	    CATEGORY[CATEGORY["DECORATOR"] = 1] = "DECORATOR";
+	    CATEGORY[CATEGORY["ACTION"] = 2] = "ACTION";
+	    CATEGORY[CATEGORY["CONDITION"] = 3] = "CONDITION";
+	})(CATEGORY = exports.CATEGORY || (exports.CATEGORY = {}));
+
+
+/***/ },
+/* 26 */
+/*!**********************************************!*\
+  !*** ./src/lib/behavior3ts/core/BaseNode.ts ***!
+  \**********************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class BaseNode {
+	    constructor(props, id) {
+	        this.id = id || helper_1.createUUID();
+	        this.properties = props;
+	    }
+	    execute(tick) {
+	        this._enter(tick);
+	        let open = tick.blackboard.get('openNodes', tick.tree.id);
+	        if (!(open && open[this.id] != undefined)) {
+	            this._open(tick);
+	        }
+	        let status = this._tick(tick);
+	        if (status !== helper_1.STATUS.RUNNING) {
+	            this._close(tick);
+	        }
+	        this._exit(tick);
+	        return status;
+	    }
+	    _enter(tick) {
+	        tick.enterNode(this);
+	        if (this.enter) {
+	            this.enter(tick);
+	        }
+	    }
+	    _open(tick) {
+	        if (this.open) {
+	            this.open(tick);
+	        }
+	    }
+	    _tick(tick) {
+	        if (this.tick) {
+	            return this.tick(tick);
+	        }
+	        return helper_1.STATUS.ERROR;
+	    }
+	    _close(tick) {
+	        tick.closeNode();
+	        if (this.close) {
+	            this.close(tick);
+	        }
+	    }
+	    _exit(tick) {
+	        if (this.exit) {
+	            this.exit(tick);
+	        }
+	    }
+	}
+	exports.BaseNode = BaseNode;
+
+
+/***/ },
+/* 27 */
+/*!**************************************************!*\
+  !*** ./src/lib/behavior3ts/core/BehaviorTree.ts ***!
+  \**************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Tick_1 = __webpack_require__(/*! ./Tick */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class BehaviorTree {
+	    constructor() {
+	        this.id = helper_1.createUUID();
+	        this.title = 'A behavior tree';
+	        this.description = 'default';
+	        this.properties = {};
+	        this.root = '';
+	        this.nodes = {};
+	    }
+	    tick(target, blackboard) {
+	        let tick = new Tick_1.Tick();
+	        tick.target = target;
+	        tick.blackboard = blackboard;
+	        tick.tree = this;
+	        let status = this.nodes[this.root].execute(tick);
+	        let lastOpenNodes = _.map(blackboard.get('openNodes', this.id) || [], (_v, nodeId) => { return this.nodes[nodeId]; });
+	        let currOpenNodes = tick.openNodes.slice(0);
+	        let start = 0;
+	        const count = Math.min(lastOpenNodes.length, currOpenNodes.length);
+	        let i;
+	        for (i = 0; i < count; i++) {
+	            start = i + 1;
+	            if (lastOpenNodes[i] !== currOpenNodes[i]) {
+	                break;
+	            }
+	        }
+	        for (i = lastOpenNodes.length - 1; i >= start; i--) {
+	            lastOpenNodes[i]._close(tick);
+	        }
+	        let _openNodes = {};
+	        _.each(currOpenNodes, (node) => { _openNodes[node.id] = true; });
+	        blackboard.set('openNodes', _openNodes, this.id);
+	        blackboard.set('nodeCount', tick.nodeCount, this.id);
+	        return status;
+	    }
+	}
+	exports.BehaviorTree = BehaviorTree;
+
+
+/***/ },
+/* 28 */
+/*!******************************************!*\
+  !*** ./src/lib/behavior3ts/core/Tick.ts ***!
+  \******************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	class Tick {
+	    constructor() {
+	        this._nodeCount = 0;
+	        this._openNodes = [];
+	    }
+	    enterNode(node) {
+	        this._nodeCount++;
+	        this._openNodes.push(node);
+	    }
+	    closeNode() {
+	        this._openNodes.pop();
+	    }
+	    get openNodes() {
+	        return this._openNodes;
+	    }
+	    get nodeCount() {
+	        return this._nodeCount;
+	    }
+	}
+	exports.Tick = Tick;
+
+
+/***/ },
+/* 29 */
+/*!*******************************************!*\
+  !*** ./src/lib/behavior3ts/core/Types.ts ***!
+  \*******************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const BaseNode_1 = __webpack_require__(/*! ./BaseNode */ 26);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class Decorator extends BaseNode_1.BaseNode {
+	    constructor() {
+	        super(...arguments);
+	        this.category = helper_1.CATEGORY.DECORATOR;
+	        this.child = '';
+	    }
+	}
+	exports.Decorator = Decorator;
+	class Condition extends BaseNode_1.BaseNode {
+	    constructor() {
+	        super(...arguments);
+	        this.category = helper_1.CATEGORY.CONDITION;
+	        this.child = '';
+	    }
+	}
+	exports.Condition = Condition;
+	class Composite extends BaseNode_1.BaseNode {
+	    constructor() {
+	        super(...arguments);
+	        this.category = helper_1.CATEGORY.COMPOSITE;
+	        this.children = [];
+	    }
+	}
+	exports.Composite = Composite;
+	class Action extends BaseNode_1.BaseNode {
+	    constructor() {
+	        super(...arguments);
+	        this.category = helper_1.CATEGORY.ACTION;
+	    }
+	}
+	exports.Action = Action;
+
+
+/***/ },
+/* 30 */
+/*!*********************************************!*\
+  !*** ./src/lib/behavior3ts/actions/Wait.ts ***!
+  \*********************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class Wait extends Types_1.Action {
+	    constructor(props, id) {
+	        super(props, id);
+	        this.endTime = props.amount || 0;
+	    }
+	    open(tick) {
+	        let startTime = Game.time;
+	        tick.blackboard.set('startTime', startTime, tick.tree.id, this.id);
+	    }
+	    tick(tick) {
+	        let currTime = Game.time;
+	        let startTime = tick.blackboard.get('startTime', tick.tree.id, this.id);
+	        if (currTime - startTime > this.endTime) {
+	            return helper_1.STATUS.SUCCESS;
+	        }
+	        return helper_1.STATUS.RUNNING;
+	    }
+	}
+	exports.Wait = Wait;
+
+
+/***/ },
+/* 31 */
+/*!*******************************************************!*\
+  !*** ./src/lib/behavior3ts/composites/MemPriority.ts ***!
+  \*******************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class MemPriority extends Types_1.Composite {
+	    open(tick) {
+	        tick.blackboard.set('runningChild', 0, tick.tree.id, this.id);
+	    }
+	    tick(tick) {
+	        let child = tick.blackboard.get('runningChild', tick.tree.id, this.id);
+	        for (let i = child; i < this.children.length; i++) {
+	            var status = tick.tree.nodes[this.children[i]].execute(tick);
+	            if (status !== helper_1.STATUS.FAILURE) {
+	                if (status === helper_1.STATUS.RUNNING) {
+	                    tick.blackboard.set('runningChild', i, tick.tree.id, this.id);
+	                }
+	                return status;
+	            }
+	        }
+	        return helper_1.STATUS.FAILURE;
+	    }
+	}
+	exports.MemPriority = MemPriority;
+
+
+/***/ },
+/* 32 */
+/*!*******************************************************!*\
+  !*** ./src/lib/behavior3ts/composites/MemSequence.ts ***!
+  \*******************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class MemSequence extends Types_1.Composite {
+	    open(tick) {
+	        tick.blackboard.set('runningChild', 0, tick.tree.id, this.id);
+	    }
+	    tick(tick) {
+	        let child = tick.blackboard.get('runningChild', tick.tree.id, this.id);
+	        for (let i = child; i < this.children.length; i++) {
+	            var status = tick.tree.nodes[this.children[i]].execute(tick);
+	            if (status !== helper_1.STATUS.SUCCESS) {
+	                if (status === helper_1.STATUS.RUNNING) {
+	                    tick.blackboard.set('runningChild', i, tick.tree.id, this.id);
+	                }
+	                return status;
+	            }
+	        }
+	        return helper_1.STATUS.SUCCESS;
+	    }
+	}
+	exports.MemSequence = MemSequence;
+
+
+/***/ },
+/* 33 */
+/*!****************************************************!*\
+  !*** ./src/lib/behavior3ts/decorators/Inverter.ts ***!
+  \****************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class Inverter extends Types_1.Decorator {
+	    tick(tick) {
+	        if (this.child === '') {
+	            return helper_1.STATUS.ERROR;
+	        }
+	        let status = tick.tree.nodes[this.child].execute(tick);
+	        if (status == helper_1.STATUS.SUCCESS) {
+	            status = helper_1.STATUS.FAILURE;
+	        }
+	        else if (status == helper_1.STATUS.FAILURE) {
+	            status = helper_1.STATUS.SUCCESS;
+	        }
+	        return status;
+	    }
+	}
+	exports.Inverter = Inverter;
+
+
+/***/ },
+/* 34 */
+/*!***************************************************!*\
+  !*** ./src/lib/behavior3ts/decorators/Limiter.ts ***!
+  \***************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class Limiter extends Types_1.Decorator {
+	    constructor(props, id) {
+	        super(props, id);
+	        this.maxLoop = props['maxLoop'];
+	    }
+	    open(tick) {
+	        tick.blackboard.set('i', 0, tick.tree.id, this.id);
+	    }
+	    tick(tick) {
+	        if (this.child == '') {
+	            return helper_1.STATUS.ERROR;
+	        }
+	        let i = tick.blackboard.get('i', tick.tree.id, this.id);
+	        if (i < this.maxLoop) {
+	            let status = tick.tree.nodes[this.child].execute(tick);
+	            if (status == helper_1.STATUS.SUCCESS || status == helper_1.STATUS.FAILURE) {
+	                tick.blackboard.set('i', i + 1, tick.tree.id, this.id);
+	            }
+	            return status;
+	        }
+	        return helper_1.STATUS.FAILURE;
+	    }
+	}
+	exports.Limiter = Limiter;
+
+
+/***/ },
+/* 35 */
+/*!**************************************************************!*\
+  !*** ./src/lib/behavior3ts/decorators/RepeatUntilSuccess.ts ***!
+  \**************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class RepeatUntilSuccess extends Types_1.Decorator {
+	    constructor(props, id) {
+	        super(props, id);
+	        this.maxLoop = props['maxLoop'];
+	    }
+	    open(tick) {
+	        tick.blackboard.set('i', 0, tick.tree.id, this.id);
+	    }
+	    tick(tick) {
+	        if (this.child == '') {
+	            return helper_1.STATUS.ERROR;
+	        }
+	        let i = tick.blackboard.get('i', tick.tree.id, this.id);
+	        let status = helper_1.STATUS.ERROR;
+	        while (this.maxLoop < 0 || i < this.maxLoop) {
+	            status = tick.tree.nodes[this.child].execute(tick);
+	            if (status == helper_1.STATUS.FAILURE) {
+	                i++;
+	            }
+	            else {
+	                break;
+	            }
+	        }
+	        i = tick.blackboard.set('i', i, tick.tree.id, this.id);
+	        return status;
+	    }
+	}
+	exports.RepeatUntilSuccess = RepeatUntilSuccess;
+
+
+/***/ },
+/* 36 */
+/*!**************************************************************!*\
+  !*** ./src/lib/behavior3ts/decorators/RepeatUntilFailure.ts ***!
+  \**************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class RepeatUntilFailure extends Types_1.Decorator {
+	    constructor(props, id) {
+	        super(props, id);
+	        this.maxLoop = props['maxLoop'];
+	    }
+	    open(tick) {
+	        tick.blackboard.set('i', 0, tick.tree.id, this.id);
+	    }
+	    tick(tick) {
+	        if (this.child == '') {
+	            return helper_1.STATUS.ERROR;
+	        }
+	        let i = tick.blackboard.get('i', tick.tree.id, this.id);
+	        let status = helper_1.STATUS.ERROR;
+	        while (this.maxLoop < 0 || i < this.maxLoop) {
+	            status = tick.tree.nodes[this.child].execute(tick);
+	            if (status == helper_1.STATUS.SUCCESS) {
+	                i++;
+	            }
+	            else {
+	                break;
+	            }
+	        }
+	        i = tick.blackboard.set('i', i, tick.tree.id, this.id);
+	        return status;
+	    }
+	}
+	exports.RepeatUntilFailure = RepeatUntilFailure;
+
+
+/***/ },
+/* 37 */
+/*!****************************************************!*\
+  !*** ./src/lib/behavior3ts/decorators/Repeater.ts ***!
+  \****************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
+	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	class Repeater extends Types_1.Decorator {
+	    constructor(props, id) {
+	        super(props, id);
+	        this.maxLoop = props['maxLoop'];
+	    }
+	    open(tick) {
+	        tick.blackboard.set('i', 0, tick.tree.id, this.id);
+	    }
+	    tick(tick) {
+	        if (this.child == '') {
+	            return helper_1.STATUS.ERROR;
+	        }
+	        let i = tick.blackboard.get('i', tick.tree.id, this.id);
+	        let status = helper_1.STATUS.ERROR;
+	        while (this.maxLoop < 0 || i < this.maxLoop) {
+	            status = tick.tree.nodes[this.child].execute(tick);
+	            if (status == helper_1.STATUS.SUCCESS || status == helper_1.STATUS.FAILURE) {
+	                i++;
+	            }
+	            else {
+	                break;
+	            }
+	        }
+	        i = tick.blackboard.set('i', i, tick.tree.id, this.id);
+	        return status;
+	    }
+	}
+	exports.Repeater = Repeater;
 
 
 /***/ }

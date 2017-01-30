@@ -25,7 +25,7 @@ export let roles: RoleConfig = {
 }
 
 interface RoomLevelConfig extends Array<RoomLevelConfigItem> { }
-interface RoomLevelConfigItem {
+export interface RoomLevelConfigItem {
   name: string
   availableCreeps: { [Key: string]: number | boolean }
   maxSlaves: number

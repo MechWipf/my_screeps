@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "module": "commonjs",
+    "moduleResolution": "node",
     "target": "es6",
     "removeComments": true,
     "noResolve": false,
@@ -9,7 +10,8 @@
     "strictNullChecks": true,
     "noUnusedParameters": true,
     "noUnusedLocals": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "allowJs": true
   },
   "compileOnSave": false,
   "include": [

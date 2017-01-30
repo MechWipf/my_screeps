@@ -1,49 +1,53 @@
-import * as Config from '../../config/general'
 // import { log } from '../support/log'
-import { MixinTaskable, ITaskable } from './task'
 import { Roles } from '../../config/creep'
+import { creepBTree } from '../../config/btrees'
+import { Blackboard, loadTree, customNodes } from '../roles/creep.bt'
 
 declare global {
-  interface Creep extends ITaskable {
+  interface Creep {
     run(): void
     getRole(): string
-    getRoleTasks(): string[]
+    getTarget(): RoomPosition | RoomObject | null
   }
 }
-// We extend ITaskable so we should get the methods, too.
-MixinTaskable(Creep)
 
 Creep.prototype.run = function (this: Creep) {
-  let doNext = true
+  if ((this as any).spawning) { return }
 
-  while (doNext) {
-    doNext = false
-
-    let task = this.taskShift()
-    if (task && task.time >= Game.time) { doNext = this.taskRun(task) }
-    else if (task) { this.taskUnshift(task) }
-  }
+  let roleName = this.getRole()
+  if (roleTrees[roleName] == undefined) { throw 'Role tree not found ' + roleName }
+  let blackboard = new Blackboard(this.memory)
+  roleTrees[roleName].tick(this, blackboard)
 }
 
 Creep.prototype.getRole = function (this: Creep) {
   let roleName = this.memory.role
   let role = Roles[roleName]
-  if (!role) { throw "Creep without role: " + this.name }
+  if (role == undefined) { throw 'Creep without role: ' + this.name }
 
   return roleName
 }
 
-Creep.prototype.getRoleTasks = function (this: Creep) {
-  // getRole has error checking
-  let role = this.getRole()
-  let roleTasks = Roles[role]['tasks'] as string[]
+Creep.prototype.getTarget = function (this: Creep) {
+  if (this.memory.target) {
+    let target = Game.getObjectById(this.memory.target) as RoomObject
+    if (target) { return target }
+  }
+  if (this.memory.targetPos) {
+    return new RoomPosition(
+      this.memory.targetPos.x,
+      this.memory.targetPos.y,
+      this.memory.targetPos.roomName
+    )
+  }
 
-  return roleTasks
+  return null
 }
 
+let roleTrees = {
+  'allrounder': loadTree(creepBTree.allrounder, customNodes),
+  'harvester-energy': loadTree(creepBTree['harvester-energy'], customNodes),
+} as any
 
-Creep.prototype.tasks = {}
-// This will register all our tasks this creep can do
-for (let role of Config.CREEP_ROLES) {
-  require('../roles/' + role).register()
-}
+roleTrees['allrounder'].id = 'allrounder'
+roleTrees['harvester-energy'].id = 'harvester-energy'

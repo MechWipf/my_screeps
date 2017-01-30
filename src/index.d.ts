@@ -10,3 +10,10 @@ interface Global {
 }
 
 declare var global: Global;
+declare var RawMemory: RawMemory
+
+declare namespace b3 {
+  class BaseNode {
+    constructor()
+  }
+}

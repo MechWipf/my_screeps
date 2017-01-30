@@ -31,7 +31,7 @@ export interface Task {
 class Taskable implements ITaskable {
   tasks: {}
 
-  taskPush(this: Room | Creep, arg: Task | number, task?: string, data?: Object) {
+  taskPush(this: Room, arg: Task | number, task?: string, data?: Object) {
     if (this.memory.queue == undefined) { this.memory.queue = [] }
     let queue: Object[] = this.memory.queue
 
@@ -47,7 +47,7 @@ class Taskable implements ITaskable {
     }
   }
 
-  taskUnshift(this: Room | Creep, arg: Task | number, task?: string, data?: Object) {
+  taskUnshift(this: Room, arg: Task | number, task?: string, data?: Object) {
     if (this.memory.queue == undefined) { this.memory.queue = [] }
     let queue: Object[] = this.memory.queue
 
@@ -63,24 +63,24 @@ class Taskable implements ITaskable {
     }
   }
 
-  taskShift(this: Room | Creep) {
+  taskShift(this: Room) {
     if (this.memory.queue == undefined) { return false }
     if (this.memory.queue.length == 0) { return false }
     return this.memory.queue.shift(0) as Task
   }
 
-  taskTop(this: Room | Creep) {
+  taskTop(this: Room) {
     if (this.memory.queue == undefined) { return false }
     if (this.memory.queue.length == 0) { return false }
     return this.memory.queue[0] as Task
   }
 
-  taskCount(this: Room | Creep) {
+  taskCount(this: Room) {
     if (this.memory.queue == undefined) { return 0 }
     return this.memory.queue.length
   }
 
-  taskRun(this: Room | Creep, task: Task) {
+  taskRun(this: Room, task: Task) {
     let taskFn = this.tasks[task.name]
     if (taskFn == undefined) {
       log.warning('Task:', log.color(task.name, 'orange'), 'is not defined.')

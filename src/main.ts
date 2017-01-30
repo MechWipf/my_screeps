@@ -1,16 +1,13 @@
 import * as Config from './config/general'
 import { log } from './components/support/log'
+import { claims } from './components/classes/Claims'
 
-import './components/classes/room'
-import './components/classes/creep'
-
-log.showSource = true
-log.showSourceOnlyDebug = true
+import './components/classes/Room'
+import './components/classes/Creep'
 
 if (Config.USE_PATHFINDER == true) {
   PathFinder.use(true)
 }
-
 
 export function loop() {
   let cpu = Game.cpu.getUsed()
@@ -29,15 +26,17 @@ export function loop() {
     creep.run()
   }
 
-  // Clears any non-existing creep memory.
-  for (let name in Memory.creeps) {
-    if (!Game.creeps[name]) {
-      log.info("Clearing non-existing creep memory:", name)
-      delete Memory.creeps[name]
-    }
-  }
-
-
   let cpuNow = Game.cpu.getUsed()
   if (cpuNow > 10) { log.info("Used CPU: ", cpuNow - cpu) }
 }
+
+// Clears any non-existing objects memory.
+// No need to run this every tick
+for (let name in Memory.creeps) {
+  if (!Game.creeps[name]) {
+    log.info("Clearing non-existing creep memory:", name)
+    delete Memory.creeps[name]
+  }
+}
+
+claims.clean()

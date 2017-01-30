@@ -1,6 +1,8 @@
 import { log } from '../support/log'
-import { Task, MixinTaskable, ITaskable } from './task'
+import { Task, MixinTaskable, ITaskable } from './Task'
+import { claims, dummyClaimer, IClaimable } from './Claims'
 import * as RoomConfig from '../../config/room'
+import * as CreepConfig from '../../config/creep'
 
 declare global {
   interface Room extends ITaskable {
@@ -20,43 +22,63 @@ declare global {
      * @returns string[]
      */
     getRoleTasks(): string[]
+
+    addSlave(name: string): void
+    deleteSlave(name: string): void
+    getSlaves(): string[]
+
+    // Spawn handling
+    getSpawns(): Spawn[]
+    spawns: Spawn[]
+
+    // Resources
+    getAvailableSources(): Source[]
+    getAvailableResources(): Array<Resource | RoomObject>
   }
 }
 // We extend ITaskable so we should get the methods too
 MixinTaskable(Room)
 
 Room.prototype.run = function (this: Room) {
-  if (this.memory.init == undefined) {
-    this.memory.init = true
-    if (this.controller && this.controller.level > 0) { this.memory.role = 'master' }
-    else { this.memory.role = 'unowned' }
+  _init(this)
+  _runTasks(this)
+}
 
-    let tasks = this.getRoleTasks()
+function _init(self: Room) {
+  if (self.memory.init == undefined) {
+    self.memory.init = true
+    if (self.controller && self.controller.level > 0) { self.memory.role = 'master' }
+    else { self.memory.role = 'unowned' }
+
+    let tasks = self.getRoleTasks()
     let time = Game.time
     _.forEach(tasks, taskName => {
       time++
-      this.taskUnshift(time, taskName)
+      self.taskUnshift(time, taskName)
     })
   }
-  let iter = Math.min(10, this.taskCount())
 
-  while (iter > 0) {
-    iter--
+}
+
+function _runTasks(self: Room) {
+  let doNext = true
+  while (doNext) {
+    doNext = false
 
     // Get the top task
-    let task: Task | false = this.taskShift()
+    let task: Task | false = self.taskShift()
     // Okay... no task found
     if (!task) { break }
 
     // Check time
     if (task.time <= Game.time) {
       // little message
-      log.debug(log.color('[' + this.name + ']', 'cyan'), 'running task', log.color(task.name, 'orange'))
+      // log.debug(log.color('[' + self.name + ']', 'cyan'), 'running task', log.color(task.name, 'orange'))
       // Requeue the task for later
-      this.taskRun(task)
+      doNext = self.taskRun(task)
     } else {
       // All okay. Run the task
-      this.taskPush(task)
+      self.taskPush(task)
     }
   }
 }
@@ -71,6 +93,34 @@ Room.prototype.getRole = function (this: Room) {
 Room.prototype.getRoleTasks = function (this: Room) {
   let role = this.getRole()
   return RoomConfig.roles[role]['tasks'] as string[]
+}
+
+Room.prototype.getSlaves = function (this: Room) {
+  if (this.memory['slaves'] == undefined) { this.memory['slaves'] = {} }
+
+  return this.memory['slaves'] as string[]
+}
+
+Room.prototype.getSpawns = function (this: Room) {
+  if (this.spawns == undefined) {
+    this.spawns = []
+    this.find(FIND_MY_SPAWNS, {
+      filter: (s: Spawn) => { this.spawns.push(s) }
+    })
+  }
+
+  return this.spawns
+}
+
+Room.prototype.getAvailableSources = function (this: Room) {
+  if (!this.memory.sources) { return [] }
+
+  let sources = _(this.memory.sources)
+    .map((sourceId: string) => { return Game.getObjectById(sourceId) })
+    .filter((source: IClaimable) => { return source != undefined && claims.isClaimable(dummyClaimer, source, 1) })
+    .value() as Source[]
+
+  return sources
 }
 
 // Declaring all tasks this object can run
@@ -146,4 +196,116 @@ tasks[RoomConfig.TASK_PLAN_ROAD] = function (this: Room, task: Task) {
       pos.createConstructionSite(STRUCTURE_ROAD)
     }
   }
+}
+
+function getRandomName(title: string) {
+  let name = ''
+  do {
+    name = title + ' ' + CreepConfig.names[Math.floor(Math.random() * CreepConfig.names.length - 1)]
+  } while (Game.creeps[name])
+
+  return name
+}
+
+tasks[RoomConfig.TASK_MANAGE_ROOM] = function (this: Room, task: Task) {
+  task.time = Game.time + 25
+  this.taskPush(task)
+
+
+  let spawnTimer = this.memory.spawnTimer || 0
+  let roomLevel = RoomConfig.level[this.memory.level]
+  let creeps = _.countBy(Game.creeps, 'memory.role')
+
+  if (spawnTimer <= Game.time) {
+    let spawns = _.filter(this.getSpawns(), { spawning: null })
+    let builder: any
+
+    if (spawns.length > 0) {
+      for (let creepType in roomLevel.availableCreeps) {
+        switch (creepType) {
+          case 'allrounder':
+            if ((creeps[creepType] || 0) < roomLevel.availableCreeps[creepType]) {
+              builder = CreepConfig.Roles[creepType]
+            }
+            break
+          case 'harvester-energy':
+            if (this.memory.sources && (creeps[creepType] || 0) < this.memory.sources.length) {
+              builder = CreepConfig.Roles[creepType]
+            }
+            break
+          default:
+            log.warning('Unrecognized creep class tried to sneak into spawn.')
+        }
+
+        if (builder != undefined) {
+          let fn = builder['build']
+          let pattern
+
+          if (fn) { pattern = fn(this.energyAvailable) }
+          else { log.warning(creepType, 'is missing a builder function') }
+
+          let mem = { role: creepType, queue: [] as any[] }
+
+          _.each(builder['tasks'], taskName => {
+            let task = { name: taskName, time: Game.time }
+            mem.queue.push(task)
+          })
+
+          spawns[0].createCreep(pattern, getRandomName(builder['name']), mem)
+          break
+        }
+      }
+    }
+  }
+
+  // Following tasks
+  this.taskUnshift(1, '_scanResources')
+}
+
+tasks['_scanResources'] = function (this: Room) {
+  let resources: Array<any> = []
+
+  this.find(FIND_MY_STRUCTURES, {
+    filter: (s: Structure) => {
+      if (s.structureType == STRUCTURE_CONTAINER) { resources.push(s) }
+    }
+  })
+
+  this.find(FIND_DROPPED_RESOURCES, {
+    filter: (r: Resource) => {
+      resources.push(r)
+    }
+  })
+
+  this.memory.resources = resources
+
+  return true
+}
+
+tasks[RoomConfig.TASK_CHECK_ROOM_LEVEL] = function (this: Room, task: Task) {
+  task.time = Game.time + 200
+
+  let currentLevel = this.memory.level || 0
+  let creeps = _.countBy(Game.creeps, 'role')
+  let energy = this.energyAvailable + (this.storage ? this.storage.store.energy : 0)
+  let extensions = 0
+
+  let newLevel = -1
+  for (let v of RoomConfig.level) {
+    if (
+      !v.require.creeps(creeps) ||
+      !(v.require.energy <= energy) ||
+      !(v.require.extensions <= extensions)
+    ) { break }
+    newLevel++
+  }
+
+  if (newLevel > currentLevel) {
+    log.info(log.color('[' + this.name + ']', 'cyan'), 'reached', log.color(RoomConfig.level[newLevel].name, 'brown'), 'status')
+  } else if (newLevel < currentLevel) {
+    log.info(log.color('[' + this.name + ']', 'cyan'), 'lost it\'s status and is now', log.color(RoomConfig.level[newLevel].name, 'brown'))
+  }
+  this.memory.level = newLevel
+
+  this.taskPush(task)
 }
