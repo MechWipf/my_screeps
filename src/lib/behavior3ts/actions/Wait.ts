@@ -10,7 +10,7 @@ export class Wait extends Action {
 
   constructor(props: any, id: any) {
     super(props, id)
-    this.endTime = props.amount || 0
+    this.endTime = props.time || 0
   }
 
   open(tick: Tick) {

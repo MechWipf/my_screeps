@@ -1,6 +1,5 @@
 export interface RoleConfigItem {
   'name': string
-  'tasks': string[]
   'build': Function | null
 }
 
@@ -9,10 +8,6 @@ export let Roles: { [k: string]: RoleConfigItem } = {}
 Roles = {
   'allrounder': {
     'name': 'Worker',
-    // Tasks are more used like "begin with this"
-    // It is possible that the spawn process overwrites the tasks
-    // to give a creep a specific work
-    'tasks': ['search_source'],
     'build': (energy: number) => {
       let pattern = [WORK, CARRY, MOVE, MOVE]
       // let cost = _.sum(pattern, o => { return BODYPART_COST[o] })
@@ -42,7 +37,6 @@ Roles = {
   },
   'harvester-energy': {
     'name': 'Farmer',
-    'tasks': ['search_source'],
     'build': (energy: number) => {
       let pattern = [WORK, WORK, CARRY, MOVE]
       // let cost = _.sum(pattern, o => { return BODYPART_COST[o] })
@@ -74,47 +68,38 @@ Roles = {
   },
   'harvester-extractor': {
     'name': 'Miner',
-    'tasks': [],
     'build': null,
   },
   'manager': {
     'name': 'Distributor',
-    'tasks': [],
     'build': null,
   },
   'carrier': {
     'name': 'Hauler',
-    'tasks': [],
     'build': null,
   },
   'updater': {
     'name': 'Upgrader',
-    'tasks': [],
     'build': null,
   },
   'builder': {
     'name': 'Builder',
-    'tasks': [],
     'build': null,
   },
   'scout': {
     'name': 'Scout',
-    'tasks': [],
     'build': null,
   },
   'attack-range': {
     'name': 'Puncher',
-    'tasks': [],
     'build': null,
   },
   'attack-close': {
     'name': 'Shooter',
-    'tasks': [],
     'build': null,
   },
   'attack-heal': {
     'name': 'Healer',
-    'tasks': [],
     'build': null,
   }
 }

@@ -123,6 +123,19 @@ Room.prototype.getAvailableSources = function (this: Room) {
   return sources
 }
 
+Room.prototype.getAvailableResources = function (this: Room) {
+  if (!this.memory.resources) { return [] }
+
+  let resources = _(this.memory.resources)
+    .map((sourceId: string) => { return Game.getObjectById(sourceId) })
+    .filter((source: IClaimable) => { return source != undefined && claims.isClaimable(dummyClaimer, source, 1) })
+    .value() as Resource[]
+
+  debugger;
+
+  return resources
+}
+
 // Declaring all tasks this object can run
 Room.prototype.tasks = {}
 let tasks = Room.prototype.tasks
@@ -244,13 +257,7 @@ tasks[RoomConfig.TASK_MANAGE_ROOM] = function (this: Room, task: Task) {
           if (fn) { pattern = fn(this.energyAvailable) }
           else { log.warning(creepType, 'is missing a builder function') }
 
-          let mem = { role: creepType, queue: [] as any[] }
-
-          _.each(builder['tasks'], taskName => {
-            let task = { name: taskName, time: Game.time }
-            mem.queue.push(task)
-          })
-
+          let mem = { role: creepType }
           spawns[0].createCreep(pattern, getRandomName(builder['name']), mem)
           break
         }
@@ -267,13 +274,13 @@ tasks['_scanResources'] = function (this: Room) {
 
   this.find(FIND_MY_STRUCTURES, {
     filter: (s: Structure) => {
-      if (s.structureType == STRUCTURE_CONTAINER) { resources.push(s) }
+      if (s.structureType == STRUCTURE_CONTAINER) { resources.push(s.id) }
     }
   })
 
   this.find(FIND_DROPPED_RESOURCES, {
     filter: (r: Resource) => {
-      resources.push(r)
+      resources.push(r.id)
     }
   })
 

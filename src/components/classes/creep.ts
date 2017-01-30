@@ -17,6 +17,7 @@ Creep.prototype.run = function (this: Creep) {
   let roleName = this.getRole()
   if (roleTrees[roleName] == undefined) { throw 'Role tree not found ' + roleName }
   let blackboard = new Blackboard(this.memory)
+  if (roleName == 'harvester-energy') { debugger; }
   roleTrees[roleName].tick(this, blackboard)
 }
 

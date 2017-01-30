@@ -26,6 +26,7 @@ export class BaseNode {
 
     if (status !== STATUS.RUNNING) {
       this._close(tick)
+      if (open) { delete open[this.id] }
     }
 
     this._exit(tick)

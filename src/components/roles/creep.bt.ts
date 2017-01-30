@@ -23,7 +23,25 @@ export namespace customNodes {
   }
   // end SearchSources
 
+  
+  // GetResources  
+  export class GetResources extends Action {
+    tick(tick: b3.Tick) {
+      let creep = tick.target as Creep
+      let sources = creep.room.getAvailableResources()
 
+      if (sources.length > 0) {
+        let source = creep.pos.findClosestByPath(sources) as Resource
+        creep.memory.target = source.id
+        return STATUS.SUCCESS
+      }
+
+      return STATUS.FAILURE
+    }
+  }
+  // end GetResources
+
+  
   // HasTarget
   export class HasTarget extends Action {
     tick(tick: b3.Tick) {
@@ -62,13 +80,21 @@ export namespace customNodes {
       if (target == undefined) { return STATUS.FAILURE }
       if (tick.target.pos.getRangeTo(target) < 2) { return STATUS.SUCCESS }
 
-      if (tick.target.moveByPath(tick.target.memory.path) != OK) { return STATUS.FAILURE }
+      switch (tick.target.moveByPath(tick.target.memory.path)) {
+        case OK:
+          break
+        case ERR_TIRED:
+          break
+        default:
+          return STATUS.FAILURE
+      }
 
       return STATUS.RUNNING
     }
   }
   // end Move
 
+  
   // Harvest
   export class Harvest extends Action {
     tick(tick: b3.Tick) {
@@ -92,6 +118,31 @@ export namespace customNodes {
   }
   // end Harvest
 
+
+  // TakeResources
+  export class TakeResources extends Action {
+    tick(tick: b3.Tick) {
+      let creep = tick.target as Creep
+
+      if (creep.carry.energy == creep.carryCapacity) {
+        return STATUS.SUCCESS
+      }
+
+      let target = creep.getTarget() as any
+      if (target.store) {
+        creep.withdraw(target, RESOURCE_ENERGY)
+      } else if (target.amount) {
+        creep.pickup(target)
+      } else {
+        return STATUS.FAILURE
+      }
+
+      return STATUS.SUCCESS
+    }
+  }
+  // end TakeResources
+
+
   // Claim
   export class Claim extends Action {
     claimTarget: string
@@ -111,6 +162,7 @@ export namespace customNodes {
   }
   // end Claim
 
+  
   // Unclaim  
   export class Unclaim extends Action {
     claimTarget: string
@@ -132,15 +184,79 @@ export namespace customNodes {
   }
   // end Unclaim
 
+  
   // Carry
   export class Carry extends Action {
     tick(tick: b3.Tick) {
-      tick
-      return b3.STATUS.SUCCESS
+      let creep = tick.target as Creep
+
+      if (creep.carry.energy == 0) {
+        return STATUS.SUCCESS
+      }
+
+      let target = creep.getTarget() as Structure
+      if (target == undefined) { return STATUS.FAILURE }
+      creep.transfer(target, RESOURCE_ENERGY)
+
+      return STATUS.SUCCESS
     }
   }
   // end Carry
 
+  
+  // GetCarryTarget  
+  export class GetCarryTarget extends Action {
+    tick(tick: b3.Tick) {
+      let creep = tick.target as Creep
+
+      let target: any = creep.pos.findClosestByRange(FIND_MY_SPAWNS, { filter: (s: Spawn) => { return s.energy < s.energyCapacity } })
+      if (target) {
+        creep.memory.target = target.id
+        return STATUS.SUCCESS
+      }
+
+      target = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, { filter: (s: Extension) => { return s.structureType == STRUCTURE_EXTENSION && s.energy < s.energyCapacity } })
+      if (target) {
+        creep.memory.target = target.id
+        return STATUS.SUCCESS
+      }
+
+      return STATUS.FAILURE
+    }
+  }
+  // end GetCarryTarget  
+
+  // Upgrade
+  export class Upgrade extends Action {
+    tick(tick: b3.Tick) {
+      let creep = tick.target as Creep
+
+      if (creep.carry.energy == 0) {
+        return STATUS.SUCCESS
+      }
+
+      let target = creep.getTarget() as Controller
+      creep.upgradeController(target)
+
+      return STATUS.RUNNING
+    }
+  }
+  // end Upgrade
+
+  
+  // GetUpgradeTarget  
+  export class GetUpgradeTarget extends Action {
+    tick(tick: b3.Tick) {
+      let creep = tick.target as Creep
+
+      creep.memory.target = (creep.room.controller as Structure).id
+
+      return STATUS.SUCCESS
+    }
+  }
+  // end GetUpgradeTarget  
+
+  
   // StoreNear
   export class StoreNear extends Action {
     tick(tick: b3.Tick) {
