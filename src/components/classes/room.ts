@@ -42,6 +42,7 @@ MixinTaskable(Room)
 Room.prototype.run = function (this: Room) {
   _init(this)
   _runTasks(this)
+  _towerDefense(this)
 }
 
 function _init(self: Room) {
@@ -81,6 +82,15 @@ function _runTasks(self: Room) {
       self.taskPush(task)
     }
   }
+}
+
+function _towerDefense(self: Room) {
+  let hostile = self.find(FIND_HOSTILE_CREEPS) as Creep[]
+  if (hostile.length == 0) { return }
+  _.each(self.find(FIND_MY_STRUCTURES, { filter: (s: Tower) => { return s.structureType == STRUCTURE_TOWER } }), (tower: Tower) => {
+    tower.attack(hostile[0])
+  })
+
 }
 
 Room.prototype.getRole = function (this: Room) {

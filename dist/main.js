@@ -3456,6 +3456,7 @@ module.exports =
 	Room.prototype.run = function () {
 	    _init(this);
 	    _runTasks(this);
+	    _towerDefense(this);
 	};
 	function _init(self) {
 	    if (self.memory.init == undefined) {
@@ -3489,6 +3490,15 @@ module.exports =
 	            self.taskPush(task);
 	        }
 	    }
+	}
+	function _towerDefense(self) {
+	    let hostile = self.find(FIND_HOSTILE_CREEPS);
+	    if (hostile.length == 0) {
+	        return;
+	    }
+	    _.each(self.find(FIND_MY_STRUCTURES, { filter: (s) => { return s.structureType == STRUCTURE_TOWER; } }), (tower) => {
+	        tower.attack(hostile[0]);
+	    });
 	}
 	Room.prototype.getRole = function () {
 	    let roleName = this.memory.role;
