@@ -1,4 +1,5 @@
 import * as b3 from '../../lib/behavior3ts'
+import { } from '../support/log'
 import { claims } from '../classes/Claims'
 
 export namespace customNodes {
@@ -23,7 +24,7 @@ export namespace customNodes {
   }
   // end SearchSources
 
-  
+
   // GetResources  
   export class GetResources extends Action {
     tick(tick: b3.Tick) {
@@ -41,7 +42,7 @@ export namespace customNodes {
   }
   // end GetResources
 
-  
+
   // HasTarget
   export class HasTarget extends Action {
     tick(tick: b3.Tick) {
@@ -73,12 +74,20 @@ export namespace customNodes {
 
   // Move
   export class Move extends Action {
+    private range: number = 1
+
+    constructor(props: b3.Properties, id: string) {
+      super(props, id)
+      this.range = <number>props['range'] || this.range
+    }
+
     tick(tick: b3.Tick) {
       if (tick.target.memory.path == undefined) { return STATUS.FAILURE }
 
       let target = tick.target.getTarget()
       if (target == undefined) { return STATUS.FAILURE }
-      if (tick.target.pos.getRangeTo(target) < 2) { return STATUS.SUCCESS }
+
+      let status = STATUS.RUNNING
 
       switch (tick.target.moveByPath(tick.target.memory.path)) {
         case OK:
@@ -86,15 +95,17 @@ export namespace customNodes {
         case ERR_TIRED:
           break
         default:
-          return STATUS.FAILURE
+          status = STATUS.FAILURE
       }
 
-      return STATUS.RUNNING
+      if (tick.target.pos.getRangeTo(target) <= this.range) { status = STATUS.SUCCESS }
+
+      return status
     }
   }
   // end Move
 
-  
+
   // Harvest
   export class Harvest extends Action {
     tick(tick: b3.Tick) {
@@ -145,11 +156,13 @@ export namespace customNodes {
 
   // Claim
   export class Claim extends Action {
-    claimTarget: string
+    claimTarget: string = 'target'
+    ticks: number = 100
 
     constructor(props: b3.Properties, id: string) {
       super(props, id)
-      this.claimTarget = props['target'] as string
+      this.claimTarget = props['target'] as string || this.claimTarget
+      this.ticks = props['ticks'] as number || this.ticks
     }
 
     tick(tick: b3.Tick) {
@@ -157,12 +170,19 @@ export namespace customNodes {
       let target = Game.getObjectById(creep.memory[this.claimTarget]) as any
       if (target == undefined) { return STATUS.ERROR }
 
-      return claims.set(creep, target, creep.carryCapacity - creep.carry.energy, target instanceof Source ? creep.ticksToLive : 100) ? STATUS.SUCCESS : STATUS.FAILURE
+      let status = claims.set(creep, target, creep.carryCapacity - creep.carry.energy, target instanceof Source ? creep.ticksToLive : this.ticks) ? STATUS.SUCCESS : STATUS.FAILURE
+      // if (status == STATUS.SUCCESS) {
+      //   log.debug(creep.name, 'claimed', target.id)
+      // } else {
+      //   log.debug(creep.name, 'failed to claim', target.id)
+      // }
+
+      return status
     }
   }
   // end Claim
 
-  
+
   // Unclaim  
   export class Unclaim extends Action {
     claimTarget: string
@@ -184,7 +204,7 @@ export namespace customNodes {
   }
   // end Unclaim
 
-  
+
   // Carry
   export class Carry extends Action {
     tick(tick: b3.Tick) {
@@ -203,11 +223,13 @@ export namespace customNodes {
   }
   // end Carry
 
-  
+
   // GetCarryTarget  
   export class GetCarryTarget extends Action {
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
+
+      if (creep.carry.energy == 0) { return STATUS.FAILURE }
 
       let target: any = creep.pos.findClosestByRange(FIND_MY_SPAWNS, { filter: (s: Spawn) => { return s.energy < s.energyCapacity } })
       if (target) {
@@ -243,11 +265,13 @@ export namespace customNodes {
   }
   // end Upgrade
 
-  
+
   // GetUpgradeTarget  
   export class GetUpgradeTarget extends Action {
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
+
+      if (creep.carry.energy == 0) { return STATUS.FAILURE }
 
       creep.memory.target = (creep.room.controller as Structure).id
 
@@ -256,7 +280,7 @@ export namespace customNodes {
   }
   // end GetUpgradeTarget  
 
-  
+
   // StoreNear
   export class StoreNear extends Action {
     tick(tick: b3.Tick) {

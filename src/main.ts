@@ -10,6 +10,19 @@ if (Config.USE_PATHFINDER == true) {
 }
 
 export function loop() {
+  if (Game.time % 10 == 0) {
+    // Clears any non-existing objects memory.
+    // No need to run this every tick
+    for (let name in Memory.creeps) {
+      if (!Game.creeps[name]) {
+        log.info("Clearing non-existing creep memory:", name)
+        delete Memory.creeps[name]
+      }
+    }
+
+    claims.clean()
+  }
+
   let cpu = Game.cpu.getUsed()
   // Check memory for null or out of bounds custom objects
   if (!Memory.uuid || Memory.uuid > 100) {
@@ -29,14 +42,3 @@ export function loop() {
   let cpuNow = Game.cpu.getUsed()
   if (cpuNow > 10) { log.info("Used CPU: ", cpuNow - cpu) }
 }
-
-// Clears any non-existing objects memory.
-// No need to run this every tick
-for (let name in Memory.creeps) {
-  if (!Game.creeps[name]) {
-    log.info("Clearing non-existing creep memory:", name)
-    delete Memory.creeps[name]
-  }
-}
-
-claims.clean()

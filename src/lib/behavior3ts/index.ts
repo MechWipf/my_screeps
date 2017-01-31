@@ -9,6 +9,8 @@ export * from './actions/Wait'
 
 export * from './composites/MemPriority'
 export * from './composites/MemSequence'
+export * from './composites/Priority'
+export * from './composites/Sequence'
 
 export * from './decorators/Inverter'
 export * from './decorators/Limiter'

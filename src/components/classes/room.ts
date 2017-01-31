@@ -1,6 +1,6 @@
 import { log } from '../support/log'
 import { Task, MixinTaskable, ITaskable } from './Task'
-import { claims, dummyClaimer, IClaimable } from './Claims'
+import { claims, dummyClaimer, IClaimable, IClaimer } from './Claims'
 import * as RoomConfig from '../../config/room'
 import * as CreepConfig from '../../config/creep'
 
@@ -112,27 +112,24 @@ Room.prototype.getSpawns = function (this: Room) {
   return this.spawns
 }
 
-Room.prototype.getAvailableSources = function (this: Room) {
+Room.prototype.getAvailableSources = function (this: Room, claimer: IClaimer = dummyClaimer) {
   if (!this.memory.sources) { return [] }
 
   let sources = _(this.memory.sources)
     .map((sourceId: string) => { return Game.getObjectById(sourceId) })
-    .filter((source: IClaimable) => { return source != undefined && claims.isClaimable(dummyClaimer, source, 1) })
+    .filter((source: IClaimable) => { return source != undefined && claims.isClaimable(claimer, source, 1) })
     .value() as Source[]
 
   return sources
 }
 
-Room.prototype.getAvailableResources = function (this: Room) {
+Room.prototype.getAvailableResources = function (this: Room, claimer: IClaimer = dummyClaimer) {
   if (!this.memory.resources) { return [] }
 
   let resources = _(this.memory.resources)
     .map((sourceId: string) => { return Game.getObjectById(sourceId) })
-    .filter((source: IClaimable) => { return source != undefined && claims.isClaimable(dummyClaimer, source, 1) })
+    .filter((source: IClaimable) => { return source != undefined && claims.isClaimable(claimer, source, 1) })
     .value() as Resource[]
-
-  debugger;
-
   return resources
 }
 

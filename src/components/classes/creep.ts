@@ -1,6 +1,5 @@
 // import { log } from '../support/log'
 import { Roles } from '../../config/creep'
-import { creepBTree } from '../../config/btrees'
 import { Blackboard, loadTree, customNodes } from '../roles/creep.bt'
 
 declare global {
@@ -17,7 +16,7 @@ Creep.prototype.run = function (this: Creep) {
   let roleName = this.getRole()
   if (roleTrees[roleName] == undefined) { throw 'Role tree not found ' + roleName }
   let blackboard = new Blackboard(this.memory)
-  if (roleName == 'harvester-energy') { debugger; }
+  // if (roleName == 'harvester-energy') { debugger; }
   roleTrees[roleName].tick(this, blackboard)
 }
 
@@ -46,8 +45,8 @@ Creep.prototype.getTarget = function (this: Creep) {
 }
 
 let roleTrees = {
-  'allrounder': loadTree(creepBTree.allrounder, customNodes),
-  'harvester-energy': loadTree(creepBTree['harvester-energy'], customNodes),
+  'allrounder': loadTree(require('allrounder'), customNodes),
+  'harvester-energy': loadTree(require('harvester-energy'), customNodes),
 } as any
 
 roleTrees['allrounder'].id = 'allrounder'

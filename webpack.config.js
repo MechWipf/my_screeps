@@ -10,7 +10,9 @@ module.exports = {
   },
 
   externals: [
-    { "map": "map" }
+    { "map": "map" },
+    { "allrounder": "allrounder" },
+    { "harvester-energy": "harvester-energy" }
   ],
 
   target: "node",

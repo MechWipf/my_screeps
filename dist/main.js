@@ -58,6 +58,15 @@ module.exports =
 	    PathFinder.use(true);
 	}
 	function loop() {
+	    if (Game.time % 10 == 0) {
+	        for (let name in Memory.creeps) {
+	            if (!Game.creeps[name]) {
+	                log_1.log.info("Clearing non-existing creep memory:", name);
+	                delete Memory.creeps[name];
+	            }
+	        }
+	        Claims_1.claims.clean();
+	    }
 	    let cpu = Game.cpu.getUsed();
 	    if (!Memory.uuid || Memory.uuid > 100) {
 	        Memory.uuid = 0;
@@ -76,13 +85,6 @@ module.exports =
 	    }
 	}
 	exports.loop = loop;
-	for (let name in Memory.creeps) {
-	    if (!Game.creeps[name]) {
-	        log_1.log.info("Clearing non-existing creep memory:", name);
-	        delete Memory.creeps[name];
-	    }
-	}
-	Claims_1.claims.clean();
 
 
 /***/ },
@@ -3319,9 +3321,10 @@ module.exports =
 /*!******************************************!*\
   !*** ./src/components/classes/Claims.ts ***!
   \******************************************/
-/***/ function(module, exports) {
+/***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	const log_1 = __webpack_require__(/*! ../support/log */ 3);
 	class Claims {
 	    constructor() {
 	        if (Memory['claims'] == undefined) {
@@ -3340,6 +3343,7 @@ module.exports =
 	            if (claimTarget.store.energy - claim.amount > amount) {
 	                claim.amount += amount;
 	                claim.list[claimer.id] = [Game.time + ticks, amount];
+	                log_1.log.debug(claimer.name, 'claimed container', claimTarget.id, 'for', amount);
 	                return true;
 	            }
 	        }
@@ -3347,6 +3351,7 @@ module.exports =
 	            if (claimTarget.amount - claim.amount > amount) {
 	                claim.amount += amount;
 	                claim.list[claimer.id] = [Game.time + ticks, amount];
+	                log_1.log.debug(claimer.name, 'claimed resource', claimTarget.id, 'for', amount);
 	                return true;
 	            }
 	        }
@@ -3354,6 +3359,7 @@ module.exports =
 	            if (claim.amount == 0) {
 	                claim.amount++;
 	                claim.list[claimer.id] = [Game.time + ticks, 1];
+	                log_1.log.debug(claimer.name, 'claimed source', claimTarget.id, 'for', 1, 'new claim amount', claim.amount);
 	                return true;
 	            }
 	        }
@@ -3365,6 +3371,7 @@ module.exports =
 	            let data = claim.list[claimer.id];
 	            claim.amount -= data[1];
 	            delete claim.list[claimer.id];
+	            log_1.log.debug(claimer.name, 'removed claim on', claimTarget.id, 'amount', data[1], 'remaining claim amount', claim.amount);
 	        }
 	    }
 	    isClaimable(claimer, claimTarget, amount) {
@@ -3387,15 +3394,17 @@ module.exports =
 	        }
 	    }
 	    clean() {
-	        _(Memory['claims']).eachRight((claim, claimId) => {
+	        _.eachRight(Memory['claims'], (claim, claimId) => {
 	            if (Game.getObjectById(claimId) == undefined) {
 	                delete Memory['claims'][claimId];
+	                log_1.log.debug('deleted claim', claimId);
 	            }
 	            else {
-	                _(claim.list).each((claimerId, data) => {
+	                _.each(claim.list, (data, claimerId) => {
 	                    if (Game.getObjectById(claimerId) == undefined || data[0] < Game.time) {
-	                        claim.amount -= data[0];
-	                        delete claim[claimerId];
+	                        claim.amount = Math.max(claim.amount - data[0], 0);
+	                        delete claim.list[claimerId];
+	                        log_1.log.debug('deleted claimer', claimerId, 'on', claimId);
 	                    }
 	                });
 	            }
@@ -3487,25 +3496,24 @@ module.exports =
 	    }
 	    return this.spawns;
 	};
-	Room.prototype.getAvailableSources = function () {
+	Room.prototype.getAvailableSources = function (claimer = Claims_1.dummyClaimer) {
 	    if (!this.memory.sources) {
 	        return [];
 	    }
 	    let sources = _(this.memory.sources)
 	        .map((sourceId) => { return Game.getObjectById(sourceId); })
-	        .filter((source) => { return source != undefined && Claims_1.claims.isClaimable(Claims_1.dummyClaimer, source, 1); })
+	        .filter((source) => { return source != undefined && Claims_1.claims.isClaimable(claimer, source, 1); })
 	        .value();
 	    return sources;
 	};
-	Room.prototype.getAvailableResources = function () {
+	Room.prototype.getAvailableResources = function (claimer = Claims_1.dummyClaimer) {
 	    if (!this.memory.resources) {
 	        return [];
 	    }
 	    let resources = _(this.memory.resources)
 	        .map((sourceId) => { return Game.getObjectById(sourceId); })
-	        .filter((source) => { return source != undefined && Claims_1.claims.isClaimable(Claims_1.dummyClaimer, source, 1); })
+	        .filter((source) => { return source != undefined && Claims_1.claims.isClaimable(claimer, source, 1); })
 	        .value();
-	    debugger;
 	    return resources;
 	};
 	Room.prototype.tasks = {};
@@ -3925,8 +3933,7 @@ module.exports =
 
 	"use strict";
 	const creep_1 = __webpack_require__(/*! ../../config/creep */ 20);
-	const btrees_1 = __webpack_require__(/*! ../../config/btrees */ 22);
-	const creep_bt_1 = __webpack_require__(/*! ../roles/creep.bt */ 23);
+	const creep_bt_1 = __webpack_require__(/*! ../roles/creep.bt */ 22);
 	Creep.prototype.run = function () {
 	    if (this.spawning) {
 	        return;
@@ -3936,9 +3943,6 @@ module.exports =
 	        throw 'Role tree not found ' + roleName;
 	    }
 	    let blackboard = new creep_bt_1.Blackboard(this.memory);
-	    if (roleName == 'harvester-energy') {
-	        debugger;
-	    }
 	    roleTrees[roleName].tick(this, blackboard);
 	};
 	Creep.prototype.getRole = function () {
@@ -3962,8 +3966,8 @@ module.exports =
 	    return null;
 	};
 	let roleTrees = {
-	    'allrounder': creep_bt_1.loadTree(btrees_1.creepBTree.allrounder, creep_bt_1.customNodes),
-	    'harvester-energy': creep_bt_1.loadTree(btrees_1.creepBTree['harvester-energy'], creep_bt_1.customNodes),
+	    'allrounder': creep_bt_1.loadTree(__webpack_require__(/*! allrounder */ 39), creep_bt_1.customNodes),
+	    'harvester-energy': creep_bt_1.loadTree(__webpack_require__(/*! harvester-energy */ 40), creep_bt_1.customNodes),
 	};
 	roleTrees['allrounder'].id = 'allrounder';
 	roleTrees['harvester-energy'].id = 'harvester-energy';
@@ -3971,1005 +3975,13 @@ module.exports =
 
 /***/ },
 /* 22 */
-/*!******************************!*\
-  !*** ./src/config/btrees.ts ***!
-  \******************************/
-/***/ function(module, exports) {
-
-	"use strict";
-	exports.creepBTree = {
-	    'allrounder': {
-	        "title": "A Behavior Tree",
-	        "description": "",
-	        "root": "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d",
-	        "display": {
-	            "camera_x": 396,
-	            "camera_y": 762,
-	            "camera_z": 0.75,
-	            "x": 16,
-	            "y": -848
-	        },
-	        "properties": {},
-	        "nodes": {
-	            "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d": {
-	                "id": "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 128,
-	                    "y": -848
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "ec725cce-f1bc-47ea-940e-25fe7e247a24",
-	                    "d87d243c-f149-4430-a7e5-435dddac4e7f"
-	                ]
-	            },
-	            "e211c7a6-ec74-4493-8d39-a5f37e5d8918": {
-	                "id": "e211c7a6-ec74-4493-8d39-a5f37e5d8918",
-	                "name": "SearchSources",
-	                "title": "SearchSources",
-	                "description": "",
-	                "display": {
-	                    "x": 816,
-	                    "y": -416
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "097ebed6-e4c7-4742-8b25-cd9960416107": {
-	                "id": "097ebed6-e4c7-4742-8b25-cd9960416107",
-	                "name": "HasTarget",
-	                "title": "HasTarget",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -320
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "04bd105b-d19f-4548-89d7-3e35584b03b6": {
-	                "id": "04bd105b-d19f-4548-89d7-3e35584b03b6",
-	                "name": "FindPath",
-	                "title": "FindPath",
-	                "description": "",
-	                "display": {
-	                    "x": 1008,
-	                    "y": -208
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "06f63f43-a3ed-4710-8ebb-2c8077e9ca06": {
-	                "id": "06f63f43-a3ed-4710-8ebb-2c8077e9ca06",
-	                "name": "Move",
-	                "title": "Move",
-	                "description": "",
-	                "display": {
-	                    "x": 1008,
-	                    "y": -160
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "49d543e5-9148-4c6a-9196-52414ffb3bdd": {
-	                "id": "49d543e5-9148-4c6a-9196-52414ffb3bdd",
-	                "name": "Harvest",
-	                "title": "Harvest",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -144
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "463eb1b3-3384-4d87-84d3-78a08e3d01ea": {
-	                "id": "463eb1b3-3384-4d87-84d3-78a08e3d01ea",
-	                "name": "RepeatUntilSuccess",
-	                "title": "Repeat Until Success",
-	                "description": "",
-	                "display": {
-	                    "x": 672,
-	                    "y": -208
-	                },
-	                "parameters": {
-	                    "maxLoop": 3
-	                },
-	                "properties": {},
-	                "child": "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d"
-	            },
-	            "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d": {
-	                "id": "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 848,
-	                    "y": -208
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "04bd105b-d19f-4548-89d7-3e35584b03b6",
-	                    "06f63f43-a3ed-4710-8ebb-2c8077e9ca06"
-	                ]
-	            },
-	            "4a8d1dd1-3d2f-4197-815b-3efd6d227970": {
-	                "id": "4a8d1dd1-3d2f-4197-815b-3efd6d227970",
-	                "name": "Carry",
-	                "title": "Carry",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": 176
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "f3b91bd2-3499-47a0-8855-cfbc258f57fe": {
-	                "id": "f3b91bd2-3499-47a0-8855-cfbc258f57fe",
-	                "name": "Claim",
-	                "title": "Claim",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -272
-	                },
-	                "parameters": {
-	                    "target": "target"
-	                },
-	                "properties": {}
-	            },
-	            "ff57bb17-1f99-4dc3-bd34-e747308dab40": {
-	                "id": "ff57bb17-1f99-4dc3-bd34-e747308dab40",
-	                "name": "Unclaim",
-	                "title": "Unclaim",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -96
-	                },
-	                "parameters": {
-	                    "target": "target"
-	                },
-	                "properties": {}
-	            },
-	            "3439fb13-8e68-42f8-8a95-6e6025853de8": {
-	                "id": "3439fb13-8e68-42f8-8a95-6e6025853de8",
-	                "name": "MemPriority",
-	                "title": "MemPriority",
-	                "description": "",
-	                "display": {
-	                    "x": 576,
-	                    "y": -416
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "e211c7a6-ec74-4493-8d39-a5f37e5d8918",
-	                    "7ead04a1-9f16-4363-80d3-396c61528e9e"
-	                ]
-	            },
-	            "7ead04a1-9f16-4363-80d3-396c61528e9e": {
-	                "id": "7ead04a1-9f16-4363-80d3-396c61528e9e",
-	                "name": "Wait",
-	                "title": "Wait",
-	                "description": "",
-	                "display": {
-	                    "x": 816,
-	                    "y": -368
-	                },
-	                "parameters": {
-	                    "time": 5
-	                },
-	                "properties": {}
-	            },
-	            "8bae7832-782d-4362-8dc8-a6239aa59cac": {
-	                "id": "8bae7832-782d-4362-8dc8-a6239aa59cac",
-	                "name": "GetCarryTarget",
-	                "title": "Get Carry Target",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": 0
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "d4f7adce-3b7a-4c51-80e7-7a703a59f7c5": {
-	                "id": "d4f7adce-3b7a-4c51-80e7-7a703a59f7c5",
-	                "name": "GetUpgradeTarget",
-	                "title": "Get Upgrade Target",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": 240
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "b087b7c1-e03c-4d84-b8b0-337dae9c8b6b": {
-	                "id": "b087b7c1-e03c-4d84-b8b0-337dae9c8b6b",
-	                "name": "Upgrade",
-	                "title": "Upgrade",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": 416
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "f877357a-5c8c-46ac-8e25-09a8e358eec1": {
-	                "id": "f877357a-5c8c-46ac-8e25-09a8e358eec1",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 480,
-	                    "y": 0
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "8bae7832-782d-4362-8dc8-a6239aa59cac",
-	                    "1179ef5e-7447-4c77-8ab7-6a71f2c6e76f",
-	                    "85d7db7e-9111-4d3f-857d-1f077c9bc6d9",
-	                    "4a8d1dd1-3d2f-4197-815b-3efd6d227970"
-	                ]
-	            },
-	            "85d7db7e-9111-4d3f-857d-1f077c9bc6d9": {
-	                "id": "85d7db7e-9111-4d3f-857d-1f077c9bc6d9",
-	                "name": "RepeatUntilSuccess",
-	                "title": "Repeat Until Success",
-	                "description": "",
-	                "display": {
-	                    "x": 672,
-	                    "y": 112
-	                },
-	                "parameters": {
-	                    "maxLoop": -1
-	                },
-	                "properties": {},
-	                "child": "6becd852-7a86-4709-8781-e946840e9474"
-	            },
-	            "6becd852-7a86-4709-8781-e946840e9474": {
-	                "id": "6becd852-7a86-4709-8781-e946840e9474",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 848,
-	                    "y": 112
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "71c7eb7a-e3be-40bd-839b-9aecfc80dae4",
-	                    "6135fb65-e9e4-4902-98d9-f26e38da68e3"
-	                ]
-	            },
-	            "71c7eb7a-e3be-40bd-839b-9aecfc80dae4": {
-	                "id": "71c7eb7a-e3be-40bd-839b-9aecfc80dae4",
-	                "name": "FindPath",
-	                "title": "FindPath",
-	                "description": "",
-	                "display": {
-	                    "x": 1008,
-	                    "y": 64
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "6135fb65-e9e4-4902-98d9-f26e38da68e3": {
-	                "id": "6135fb65-e9e4-4902-98d9-f26e38da68e3",
-	                "name": "Move",
-	                "title": "Move",
-	                "description": "",
-	                "display": {
-	                    "x": 1008,
-	                    "y": 112
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "1179ef5e-7447-4c77-8ab7-6a71f2c6e76f": {
-	                "id": "1179ef5e-7447-4c77-8ab7-6a71f2c6e76f",
-	                "name": "HasTarget",
-	                "title": "HasTarget",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": 48
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "6a372c7c-70e4-4b82-af13-65131072a289": {
-	                "id": "6a372c7c-70e4-4b82-af13-65131072a289",
-	                "name": "RepeatUntilSuccess",
-	                "title": "Repeat Until Success",
-	                "description": "",
-	                "display": {
-	                    "x": 672,
-	                    "y": 352
-	                },
-	                "parameters": {
-	                    "maxLoop": -1
-	                },
-	                "properties": {},
-	                "child": "c4906621-d1d3-4738-bae1-88c7227f702f"
-	            },
-	            "c4906621-d1d3-4738-bae1-88c7227f702f": {
-	                "id": "c4906621-d1d3-4738-bae1-88c7227f702f",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 848,
-	                    "y": 352
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "16a19228-1814-4b0a-96e7-17ace05fa849",
-	                    "d512c04a-f561-474b-894d-c577f04413de"
-	                ]
-	            },
-	            "16a19228-1814-4b0a-96e7-17ace05fa849": {
-	                "id": "16a19228-1814-4b0a-96e7-17ace05fa849",
-	                "name": "FindPath",
-	                "title": "FindPath",
-	                "description": "",
-	                "display": {
-	                    "x": 1008,
-	                    "y": 304
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "d512c04a-f561-474b-894d-c577f04413de": {
-	                "id": "d512c04a-f561-474b-894d-c577f04413de",
-	                "name": "Move",
-	                "title": "Move",
-	                "description": "",
-	                "display": {
-	                    "x": 1008,
-	                    "y": 352
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "172f676a-10bb-4fd6-98b0-e89f36dbf6bf": {
-	                "id": "172f676a-10bb-4fd6-98b0-e89f36dbf6bf",
-	                "name": "HasTarget",
-	                "title": "HasTarget",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": 288
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "62d33030-4dc2-45d1-8938-da3baaf0ab7f": {
-	                "id": "62d33030-4dc2-45d1-8938-da3baaf0ab7f",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 480,
-	                    "y": 240
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "d4f7adce-3b7a-4c51-80e7-7a703a59f7c5",
-	                    "172f676a-10bb-4fd6-98b0-e89f36dbf6bf",
-	                    "6a372c7c-70e4-4b82-af13-65131072a289",
-	                    "b087b7c1-e03c-4d84-b8b0-337dae9c8b6b"
-	                ]
-	            },
-	            "d87d243c-f149-4430-a7e5-435dddac4e7f": {
-	                "id": "d87d243c-f149-4430-a7e5-435dddac4e7f",
-	                "name": "MemPriority",
-	                "title": "MemPriority",
-	                "description": "",
-	                "display": {
-	                    "x": 240,
-	                    "y": 0
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "f877357a-5c8c-46ac-8e25-09a8e358eec1",
-	                    "62d33030-4dc2-45d1-8938-da3baaf0ab7f"
-	                ]
-	            },
-	            "552e8bea-37b7-4698-acc7-d78e5d8c8366": {
-	                "id": "552e8bea-37b7-4698-acc7-d78e5d8c8366",
-	                "name": "HasTarget",
-	                "title": "HasTarget",
-	                "description": "",
-	                "display": {
-	                    "x": 624,
-	                    "y": -752
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "a49acbbd-b33f-4d33-a74d-960b2482f48d": {
-	                "id": "a49acbbd-b33f-4d33-a74d-960b2482f48d",
-	                "name": "FindPath",
-	                "title": "FindPath",
-	                "description": "",
-	                "display": {
-	                    "x": 992,
-	                    "y": -640
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "a587df6b-1c79-4e06-8d81-63d2b8355a4e": {
-	                "id": "a587df6b-1c79-4e06-8d81-63d2b8355a4e",
-	                "name": "Move",
-	                "title": "Move",
-	                "description": "",
-	                "display": {
-	                    "x": 992,
-	                    "y": -592
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "c299c71f-02dc-4f13-bc7f-808a00f9d1fa": {
-	                "id": "c299c71f-02dc-4f13-bc7f-808a00f9d1fa",
-	                "name": "RepeatUntilSuccess",
-	                "title": "Repeat Until Success",
-	                "description": "",
-	                "display": {
-	                    "x": 656,
-	                    "y": -640
-	                },
-	                "parameters": {
-	                    "maxLoop": -1
-	                },
-	                "properties": {},
-	                "child": "8755fbaa-ec35-4a87-8724-a0b57d9ce092"
-	            },
-	            "8755fbaa-ec35-4a87-8724-a0b57d9ce092": {
-	                "id": "8755fbaa-ec35-4a87-8724-a0b57d9ce092",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 832,
-	                    "y": -640
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "a49acbbd-b33f-4d33-a74d-960b2482f48d",
-	                    "a587df6b-1c79-4e06-8d81-63d2b8355a4e"
-	                ]
-	            },
-	            "e0830063-a070-449f-8dea-bf75107c80c7": {
-	                "id": "e0830063-a070-449f-8dea-bf75107c80c7",
-	                "name": "Claim",
-	                "title": "Claim",
-	                "description": "",
-	                "display": {
-	                    "x": 624,
-	                    "y": -704
-	                },
-	                "parameters": {
-	                    "target": "target"
-	                },
-	                "properties": {}
-	            },
-	            "53b097e6-ac21-47ba-9cf8-a60383e09498": {
-	                "id": "53b097e6-ac21-47ba-9cf8-a60383e09498",
-	                "name": "Unclaim",
-	                "title": "Unclaim",
-	                "description": "",
-	                "display": {
-	                    "x": 624,
-	                    "y": -528
-	                },
-	                "parameters": {
-	                    "target": "target"
-	                },
-	                "properties": {}
-	            },
-	            "ed719d4e-15d7-4b0e-9130-b5b163e1ebd9": {
-	                "id": "ed719d4e-15d7-4b0e-9130-b5b163e1ebd9",
-	                "name": "MemPriority",
-	                "title": "MemPriority",
-	                "description": "",
-	                "display": {
-	                    "x": 560,
-	                    "y": -848
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "11e07d8a-6af9-4acf-b885-90fdf8dbf987",
-	                    "7d4d0286-42eb-42ba-8609-ee2662a0900b"
-	                ]
-	            },
-	            "7d4d0286-42eb-42ba-8609-ee2662a0900b": {
-	                "id": "7d4d0286-42eb-42ba-8609-ee2662a0900b",
-	                "name": "Wait",
-	                "title": "Wait",
-	                "description": "",
-	                "display": {
-	                    "x": 800,
-	                    "y": -800
-	                },
-	                "parameters": {
-	                    "timer": 2
-	                },
-	                "properties": {}
-	            },
-	            "f6925e55-9377-443a-8bf0-0412d94a38d7": {
-	                "id": "f6925e55-9377-443a-8bf0-0412d94a38d7",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 384,
-	                    "y": -416
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "3439fb13-8e68-42f8-8a95-6e6025853de8",
-	                    "097ebed6-e4c7-4742-8b25-cd9960416107",
-	                    "f3b91bd2-3499-47a0-8855-cfbc258f57fe",
-	                    "463eb1b3-3384-4d87-84d3-78a08e3d01ea",
-	                    "49d543e5-9148-4c6a-9196-52414ffb3bdd",
-	                    "ff57bb17-1f99-4dc3-bd34-e747308dab40"
-	                ]
-	            },
-	            "3fb029a8-b3c9-4a51-bfc5-9ed83f339b90": {
-	                "id": "3fb029a8-b3c9-4a51-bfc5-9ed83f339b90",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 416,
-	                    "y": -848
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "ed719d4e-15d7-4b0e-9130-b5b163e1ebd9",
-	                    "552e8bea-37b7-4698-acc7-d78e5d8c8366",
-	                    "e0830063-a070-449f-8dea-bf75107c80c7",
-	                    "c299c71f-02dc-4f13-bc7f-808a00f9d1fa",
-	                    "eec469dc-9393-46d2-89da-32f02486dd6d",
-	                    "53b097e6-ac21-47ba-9cf8-a60383e09498"
-	                ]
-	            },
-	            "ec725cce-f1bc-47ea-940e-25fe7e247a24": {
-	                "id": "ec725cce-f1bc-47ea-940e-25fe7e247a24",
-	                "name": "MemPriority",
-	                "title": "MemPriority",
-	                "description": "",
-	                "display": {
-	                    "x": 272,
-	                    "y": -848
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "3fb029a8-b3c9-4a51-bfc5-9ed83f339b90",
-	                    "f6925e55-9377-443a-8bf0-0412d94a38d7"
-	                ]
-	            },
-	            "11e07d8a-6af9-4acf-b885-90fdf8dbf987": {
-	                "id": "11e07d8a-6af9-4acf-b885-90fdf8dbf987",
-	                "name": "GetResources",
-	                "title": "GetResources",
-	                "description": "",
-	                "display": {
-	                    "x": 800,
-	                    "y": -848
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "eec469dc-9393-46d2-89da-32f02486dd6d": {
-	                "id": "eec469dc-9393-46d2-89da-32f02486dd6d",
-	                "name": "TakeResources",
-	                "title": "TakeResources",
-	                "description": "",
-	                "display": {
-	                    "x": 624,
-	                    "y": -576
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            }
-	        },
-	        "custom_nodes": [
-	            {
-	                "name": "SearchSources",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "HasTarget",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "FindPath",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Move",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Harvest",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Carry",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Claim",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Unclaim",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "StoreNear",
-	                "title": "Store",
-	                "category": "action"
-	            },
-	            {
-	                "name": "GetCarryTarget",
-	                "title": "Get Carry Target",
-	                "category": "action"
-	            },
-	            {
-	                "name": "GetUpgradeTarget",
-	                "title": "Get Upgrade Target",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Upgrade",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "GetResources",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "TakeResources",
-	                "title": "",
-	                "category": "action"
-	            }
-	        ]
-	    },
-	    'harvester-energy': {
-	        "title": "A Behavior Tree",
-	        "description": "",
-	        "root": "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d",
-	        "display": {
-	            "camera_x": 579,
-	            "camera_y": 652,
-	            "camera_z": 1.25,
-	            "x": -64,
-	            "y": -48
-	        },
-	        "properties": {},
-	        "nodes": {
-	            "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d": {
-	                "id": "7a71d7c5-88da-48c6-b000-0b13a4f0ed7d",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 16,
-	                    "y": -48
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "cd5d1a9c-e71e-4a05-a0e5-2a69b8298b22",
-	                    "097ebed6-e4c7-4742-8b25-cd9960416107",
-	                    "f3b91bd2-3499-47a0-8855-cfbc258f57fe",
-	                    "463eb1b3-3384-4d87-84d3-78a08e3d01ea",
-	                    "ba79a9eb-5b33-4da5-9db1-aded73ea3ee0"
-	                ]
-	            },
-	            "e211c7a6-ec74-4493-8d39-a5f37e5d8918": {
-	                "id": "e211c7a6-ec74-4493-8d39-a5f37e5d8918",
-	                "name": "SearchSources",
-	                "title": "SearchSources",
-	                "description": "",
-	                "display": {
-	                    "x": 464,
-	                    "y": -368
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "097ebed6-e4c7-4742-8b25-cd9960416107": {
-	                "id": "097ebed6-e4c7-4742-8b25-cd9960416107",
-	                "name": "HasTarget",
-	                "title": "HasTarget",
-	                "description": "",
-	                "display": {
-	                    "x": 272,
-	                    "y": -272
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "04bd105b-d19f-4548-89d7-3e35584b03b6": {
-	                "id": "04bd105b-d19f-4548-89d7-3e35584b03b6",
-	                "name": "FindPath",
-	                "title": "FindPath",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -208
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "06f63f43-a3ed-4710-8ebb-2c8077e9ca06": {
-	                "id": "06f63f43-a3ed-4710-8ebb-2c8077e9ca06",
-	                "name": "Move",
-	                "title": "Move",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -160
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "49d543e5-9148-4c6a-9196-52414ffb3bdd": {
-	                "id": "49d543e5-9148-4c6a-9196-52414ffb3bdd",
-	                "name": "Harvest",
-	                "title": "Harvest",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -112
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "463eb1b3-3384-4d87-84d3-78a08e3d01ea": {
-	                "id": "463eb1b3-3384-4d87-84d3-78a08e3d01ea",
-	                "name": "RepeatUntilSuccess",
-	                "title": "Repeat Until Success",
-	                "description": "",
-	                "display": {
-	                    "x": 304,
-	                    "y": -160
-	                },
-	                "parameters": {
-	                    "maxLoop": 3
-	                },
-	                "properties": {},
-	                "child": "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d"
-	            },
-	            "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d": {
-	                "id": "0cb66983-7d5e-4dd1-8bc3-3ae815f6af5d",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 480,
-	                    "y": -160
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "04bd105b-d19f-4548-89d7-3e35584b03b6",
-	                    "06f63f43-a3ed-4710-8ebb-2c8077e9ca06"
-	                ]
-	            },
-	            "f3b91bd2-3499-47a0-8855-cfbc258f57fe": {
-	                "id": "f3b91bd2-3499-47a0-8855-cfbc258f57fe",
-	                "name": "Claim",
-	                "title": "Claim",
-	                "description": "",
-	                "display": {
-	                    "x": 272,
-	                    "y": -224
-	                },
-	                "parameters": {
-	                    "target": "target"
-	                },
-	                "properties": {}
-	            },
-	            "ba79a9eb-5b33-4da5-9db1-aded73ea3ee0": {
-	                "id": "ba79a9eb-5b33-4da5-9db1-aded73ea3ee0",
-	                "name": "Repeater",
-	                "title": "Repeater",
-	                "description": "",
-	                "display": {
-	                    "x": 256,
-	                    "y": -64
-	                },
-	                "parameters": {
-	                    "maxLoop": "1e999"
-	                },
-	                "properties": {},
-	                "child": "e2844393-cf37-42f4-83ee-7b57dd4d9359"
-	            },
-	            "7dd677a2-8de4-44c7-9d6a-59b5b43f3247": {
-	                "id": "7dd677a2-8de4-44c7-9d6a-59b5b43f3247",
-	                "name": "StoreNear",
-	                "title": "Store",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -64
-	                },
-	                "parameters": {},
-	                "properties": {}
-	            },
-	            "e2844393-cf37-42f4-83ee-7b57dd4d9359": {
-	                "id": "e2844393-cf37-42f4-83ee-7b57dd4d9359",
-	                "name": "MemSequence",
-	                "title": "MemSequence",
-	                "description": "",
-	                "display": {
-	                    "x": 464,
-	                    "y": -64
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "49d543e5-9148-4c6a-9196-52414ffb3bdd",
-	                    "7dd677a2-8de4-44c7-9d6a-59b5b43f3247",
-	                    "c82e59b6-befe-4f8e-9010-4ec9fd2f6966"
-	                ]
-	            },
-	            "de04a0f8-e874-4b27-8451-f2f1ff070283": {
-	                "id": "de04a0f8-e874-4b27-8451-f2f1ff070283",
-	                "name": "Wait",
-	                "title": "Wait",
-	                "description": "",
-	                "display": {
-	                    "x": 464,
-	                    "y": -320
-	                },
-	                "parameters": {
-	                    "time": 10
-	                },
-	                "properties": {}
-	            },
-	            "cd5d1a9c-e71e-4a05-a0e5-2a69b8298b22": {
-	                "id": "cd5d1a9c-e71e-4a05-a0e5-2a69b8298b22",
-	                "name": "MemPriority",
-	                "title": "MemPriority",
-	                "description": "",
-	                "display": {
-	                    "x": 208,
-	                    "y": -320
-	                },
-	                "parameters": {},
-	                "properties": {},
-	                "children": [
-	                    "e211c7a6-ec74-4493-8d39-a5f37e5d8918",
-	                    "de04a0f8-e874-4b27-8451-f2f1ff070283"
-	                ]
-	            },
-	            "c82e59b6-befe-4f8e-9010-4ec9fd2f6966": {
-	                "id": "c82e59b6-befe-4f8e-9010-4ec9fd2f6966",
-	                "name": "Wait",
-	                "title": "Wait",
-	                "description": "",
-	                "display": {
-	                    "x": 640,
-	                    "y": -16
-	                },
-	                "parameters": {
-	                    "time": 1
-	                },
-	                "properties": {}
-	            }
-	        },
-	        "custom_nodes": [
-	            {
-	                "name": "SearchSources",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "HasTarget",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "FindPath",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Move",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Harvest",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Carry",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Claim",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Unclaim",
-	                "title": "",
-	                "category": "action"
-	            },
-	            {
-	                "name": "StoreNear",
-	                "title": "Store",
-	                "category": "action"
-	            },
-	            {
-	                "name": "GetCarryTarget",
-	                "title": "Get Carry Target",
-	                "category": "action"
-	            },
-	            {
-	                "name": "GetUpgradeTarget",
-	                "title": "Get Upgrade Target",
-	                "category": "action"
-	            },
-	            {
-	                "name": "Upgrade",
-	                "title": "",
-	                "category": "action"
-	            }
-	        ]
-	    },
-	};
-
-
-/***/ },
-/* 23 */
 /*!******************************************!*\
   !*** ./src/components/roles/creep.bt.ts ***!
   \******************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const b3 = __webpack_require__(/*! ../../lib/behavior3ts */ 24);
+	const b3 = __webpack_require__(/*! ../../lib/behavior3ts */ 23);
 	const Claims_1 = __webpack_require__(/*! ../classes/Claims */ 16);
 	var customNodes;
 	(function (customNodes) {
@@ -5028,6 +4040,11 @@ module.exports =
 	    }
 	    customNodes.FindPath = FindPath;
 	    class Move extends Action {
+	        constructor(props, id) {
+	            super(props, id);
+	            this.range = 1;
+	            this.range = props['range'] || this.range;
+	        }
 	        tick(tick) {
 	            if (tick.target.memory.path == undefined) {
 	                return STATUS.FAILURE;
@@ -5036,18 +4053,19 @@ module.exports =
 	            if (target == undefined) {
 	                return STATUS.FAILURE;
 	            }
-	            if (tick.target.pos.getRangeTo(target) < 2) {
-	                return STATUS.SUCCESS;
-	            }
+	            let status = STATUS.RUNNING;
 	            switch (tick.target.moveByPath(tick.target.memory.path)) {
 	                case OK:
 	                    break;
 	                case ERR_TIRED:
 	                    break;
 	                default:
-	                    return STATUS.FAILURE;
+	                    status = STATUS.FAILURE;
 	            }
-	            return STATUS.RUNNING;
+	            if (tick.target.pos.getRangeTo(target) <= this.range) {
+	                status = STATUS.SUCCESS;
+	            }
+	            return status;
 	        }
 	    }
 	    customNodes.Move = Move;
@@ -5093,7 +4111,10 @@ module.exports =
 	    class Claim extends Action {
 	        constructor(props, id) {
 	            super(props, id);
-	            this.claimTarget = props['target'];
+	            this.claimTarget = 'target';
+	            this.ticks = 100;
+	            this.claimTarget = props['target'] || this.claimTarget;
+	            this.ticks = props['ticks'] || this.ticks;
 	        }
 	        tick(tick) {
 	            let creep = tick.target;
@@ -5101,7 +4122,8 @@ module.exports =
 	            if (target == undefined) {
 	                return STATUS.ERROR;
 	            }
-	            return Claims_1.claims.set(creep, target, creep.carryCapacity - creep.carry.energy, target instanceof Source ? creep.ticksToLive : 100) ? STATUS.SUCCESS : STATUS.FAILURE;
+	            let status = Claims_1.claims.set(creep, target, creep.carryCapacity - creep.carry.energy, target instanceof Source ? creep.ticksToLive : this.ticks) ? STATUS.SUCCESS : STATUS.FAILURE;
+	            return status;
 	        }
 	    }
 	    customNodes.Claim = Claim;
@@ -5139,6 +4161,9 @@ module.exports =
 	    class GetCarryTarget extends Action {
 	        tick(tick) {
 	            let creep = tick.target;
+	            if (creep.carry.energy == 0) {
+	                return STATUS.FAILURE;
+	            }
 	            let target = creep.pos.findClosestByRange(FIND_MY_SPAWNS, { filter: (s) => { return s.energy < s.energyCapacity; } });
 	            if (target) {
 	                creep.memory.target = target.id;
@@ -5168,6 +4193,9 @@ module.exports =
 	    class GetUpgradeTarget extends Action {
 	        tick(tick) {
 	            let creep = tick.target;
+	            if (creep.carry.energy == 0) {
+	                return STATUS.FAILURE;
+	            }
 	            creep.memory.target = creep.room.controller.id;
 	            return STATUS.SUCCESS;
 	        }
@@ -5277,7 +4305,7 @@ module.exports =
 
 
 /***/ },
-/* 24 */
+/* 23 */
 /*!**************************************!*\
   !*** ./src/lib/behavior3ts/index.ts ***!
   \**************************************/
@@ -5287,23 +4315,25 @@ module.exports =
 	function __export(m) {
 	    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 	}
-	__export(__webpack_require__(/*! ./helper */ 25));
-	__export(__webpack_require__(/*! ./core/BaseNode */ 26));
-	__export(__webpack_require__(/*! ./core/BehaviorTree */ 27));
-	__export(__webpack_require__(/*! ./core/Tick */ 28));
-	__export(__webpack_require__(/*! ./core/Types */ 29));
-	__export(__webpack_require__(/*! ./actions/Wait */ 30));
-	__export(__webpack_require__(/*! ./composites/MemPriority */ 31));
-	__export(__webpack_require__(/*! ./composites/MemSequence */ 32));
-	__export(__webpack_require__(/*! ./decorators/Inverter */ 33));
-	__export(__webpack_require__(/*! ./decorators/Limiter */ 34));
-	__export(__webpack_require__(/*! ./decorators/RepeatUntilSuccess */ 35));
-	__export(__webpack_require__(/*! ./decorators/RepeatUntilFailure */ 36));
-	__export(__webpack_require__(/*! ./decorators/Repeater */ 37));
+	__export(__webpack_require__(/*! ./helper */ 24));
+	__export(__webpack_require__(/*! ./core/BaseNode */ 25));
+	__export(__webpack_require__(/*! ./core/BehaviorTree */ 26));
+	__export(__webpack_require__(/*! ./core/Tick */ 27));
+	__export(__webpack_require__(/*! ./core/Types */ 28));
+	__export(__webpack_require__(/*! ./actions/Wait */ 29));
+	__export(__webpack_require__(/*! ./composites/MemPriority */ 30));
+	__export(__webpack_require__(/*! ./composites/MemSequence */ 31));
+	__export(__webpack_require__(/*! ./composites/Priority */ 32));
+	__export(__webpack_require__(/*! ./composites/Sequence */ 33));
+	__export(__webpack_require__(/*! ./decorators/Inverter */ 34));
+	__export(__webpack_require__(/*! ./decorators/Limiter */ 35));
+	__export(__webpack_require__(/*! ./decorators/RepeatUntilSuccess */ 36));
+	__export(__webpack_require__(/*! ./decorators/RepeatUntilFailure */ 37));
+	__export(__webpack_require__(/*! ./decorators/Repeater */ 38));
 
 
 /***/ },
-/* 25 */
+/* 24 */
 /*!***************************************!*\
   !*** ./src/lib/behavior3ts/helper.ts ***!
   \***************************************/
@@ -5341,14 +4371,14 @@ module.exports =
 
 
 /***/ },
-/* 26 */
+/* 25 */
 /*!**********************************************!*\
   !*** ./src/lib/behavior3ts/core/BaseNode.ts ***!
   \**********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class BaseNode {
 	    constructor(props, id) {
 	        this.id = id || helper_1.createUUID();
@@ -5403,15 +4433,15 @@ module.exports =
 
 
 /***/ },
-/* 27 */
+/* 26 */
 /*!**************************************************!*\
   !*** ./src/lib/behavior3ts/core/BehaviorTree.ts ***!
   \**************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Tick_1 = __webpack_require__(/*! ./Tick */ 28);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Tick_1 = __webpack_require__(/*! ./Tick */ 27);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class BehaviorTree {
 	    constructor() {
 	        this.id = helper_1.createUUID();
@@ -5452,7 +4482,7 @@ module.exports =
 
 
 /***/ },
-/* 28 */
+/* 27 */
 /*!******************************************!*\
   !*** ./src/lib/behavior3ts/core/Tick.ts ***!
   \******************************************/
@@ -5482,15 +4512,15 @@ module.exports =
 
 
 /***/ },
-/* 29 */
+/* 28 */
 /*!*******************************************!*\
   !*** ./src/lib/behavior3ts/core/Types.ts ***!
   \*******************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const BaseNode_1 = __webpack_require__(/*! ./BaseNode */ 26);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const BaseNode_1 = __webpack_require__(/*! ./BaseNode */ 25);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class Decorator extends BaseNode_1.BaseNode {
 	    constructor() {
 	        super(...arguments);
@@ -5525,19 +4555,19 @@ module.exports =
 
 
 /***/ },
-/* 30 */
+/* 29 */
 /*!*********************************************!*\
   !*** ./src/lib/behavior3ts/actions/Wait.ts ***!
   \*********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class Wait extends Types_1.Action {
 	    constructor(props, id) {
 	        super(props, id);
-	        this.endTime = props.time || 0;
+	        this.endTime = props.time != undefined ? props.time : 0;
 	    }
 	    open(tick) {
 	        let startTime = Game.time;
@@ -5556,15 +4586,15 @@ module.exports =
 
 
 /***/ },
-/* 31 */
+/* 30 */
 /*!*******************************************************!*\
   !*** ./src/lib/behavior3ts/composites/MemPriority.ts ***!
   \*******************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class MemPriority extends Types_1.Composite {
 	    open(tick) {
 	        tick.blackboard.set('runningChild', 0, tick.tree.id, this.id);
@@ -5587,15 +4617,15 @@ module.exports =
 
 
 /***/ },
-/* 32 */
+/* 31 */
 /*!*******************************************************!*\
   !*** ./src/lib/behavior3ts/composites/MemSequence.ts ***!
   \*******************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class MemSequence extends Types_1.Composite {
 	    open(tick) {
 	        tick.blackboard.set('runningChild', 0, tick.tree.id, this.id);
@@ -5618,15 +4648,63 @@ module.exports =
 
 
 /***/ },
+/* 32 */
+/*!****************************************************!*\
+  !*** ./src/lib/behavior3ts/composites/Priority.ts ***!
+  \****************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
+	class Priority extends Types_1.Composite {
+	    tick(tick) {
+	        for (let i = 0; i < this.children.length; i++) {
+	            var status = tick.tree.nodes[this.children[i]].execute(tick);
+	            if (status !== helper_1.STATUS.FAILURE) {
+	                return status;
+	            }
+	        }
+	        return helper_1.STATUS.FAILURE;
+	    }
+	}
+	exports.Priority = Priority;
+
+
+/***/ },
 /* 33 */
+/*!****************************************************!*\
+  !*** ./src/lib/behavior3ts/composites/Sequence.ts ***!
+  \****************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
+	class Sequence extends Types_1.Composite {
+	    tick(tick) {
+	        for (let i = 0; i < this.children.length; i++) {
+	            var status = tick.tree.nodes[this.children[i]].execute(tick);
+	            if (status !== helper_1.STATUS.SUCCESS) {
+	                return status;
+	            }
+	        }
+	        return helper_1.STATUS.SUCCESS;
+	    }
+	}
+	exports.Sequence = Sequence;
+
+
+/***/ },
+/* 34 */
 /*!****************************************************!*\
   !*** ./src/lib/behavior3ts/decorators/Inverter.ts ***!
   \****************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class Inverter extends Types_1.Decorator {
 	    tick(tick) {
 	        if (this.child === '') {
@@ -5646,15 +4724,15 @@ module.exports =
 
 
 /***/ },
-/* 34 */
+/* 35 */
 /*!***************************************************!*\
   !*** ./src/lib/behavior3ts/decorators/Limiter.ts ***!
   \***************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class Limiter extends Types_1.Decorator {
 	    constructor(props, id) {
 	        super(props, id);
@@ -5682,15 +4760,15 @@ module.exports =
 
 
 /***/ },
-/* 35 */
+/* 36 */
 /*!**************************************************************!*\
   !*** ./src/lib/behavior3ts/decorators/RepeatUntilSuccess.ts ***!
   \**************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class RepeatUntilSuccess extends Types_1.Decorator {
 	    constructor(props, id) {
 	        super(props, id);
@@ -5722,15 +4800,15 @@ module.exports =
 
 
 /***/ },
-/* 36 */
+/* 37 */
 /*!**************************************************************!*\
   !*** ./src/lib/behavior3ts/decorators/RepeatUntilFailure.ts ***!
   \**************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class RepeatUntilFailure extends Types_1.Decorator {
 	    constructor(props, id) {
 	        super(props, id);
@@ -5762,15 +4840,15 @@ module.exports =
 
 
 /***/ },
-/* 37 */
+/* 38 */
 /*!****************************************************!*\
   !*** ./src/lib/behavior3ts/decorators/Repeater.ts ***!
   \****************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	const Types_1 = __webpack_require__(/*! ../core/Types */ 29);
-	const helper_1 = __webpack_require__(/*! ../helper */ 25);
+	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
+	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class Repeater extends Types_1.Decorator {
 	    constructor(props, id) {
 	        super(props, id);
@@ -5800,6 +4878,24 @@ module.exports =
 	}
 	exports.Repeater = Repeater;
 
+
+/***/ },
+/* 39 */
+/*!*****************************!*\
+  !*** external "allrounder" ***!
+  \*****************************/
+/***/ function(module, exports) {
+
+	module.exports = require("allrounder");
+
+/***/ },
+/* 40 */
+/*!***********************************!*\
+  !*** external "harvester-energy" ***!
+  \***********************************/
+/***/ function(module, exports) {
+
+	module.exports = require("harvester-energy");
 
 /***/ }
 /******/ ]);
