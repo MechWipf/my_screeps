@@ -3,7 +3,7 @@ import { Composite } from '../core/Types'
 import { STATUS } from '../helper'
 
 export class MemPriority extends Composite {
-  name: 'MemPriority'
+  name: string = 'MemPriority'
 
   open(tick: Tick) {
     tick.blackboard.set('runningChild', 0, tick.tree.id, this.id)

@@ -5,8 +5,8 @@ import { STATUS } from '../helper'
 export class Wait extends Action {
   endTime: number
 
-  name: 'Wait'
-  title: 'Wait some time'
+  name: string = 'Wait'
+  title: string = 'Wait some time'
 
   constructor(props: any, id: any) {
     super(props, id)

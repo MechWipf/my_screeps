@@ -6,6 +6,7 @@ export class Tick {
   tree: BehaviorTree
   target: any
   blackboard: Blackboard
+  debug?: any
 
   protected _openNodes: BaseNode[]
   protected _nodeCount: number

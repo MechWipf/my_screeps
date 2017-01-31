@@ -3,7 +3,7 @@ import { Decorator } from '../core/Types'
 import { STATUS } from '../helper'
 
 export class Inverter extends Decorator {
-  name: 'Inverter'
+  name: string = 'Inverter'
 
   tick(tick: Tick) {
     if (this.child === '') { return STATUS.ERROR }

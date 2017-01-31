@@ -18,21 +18,42 @@ class Claims {
   set(claimer: IClaimer, claimTarget: IClaimable, amount: number = 1, ticks: number = 100): boolean {
     let claim = this._getClaimMemory(claimTarget.id)
 
-    if (claimTarget.store) {
-      if (claimTarget.store.energy - claim.amount > amount) {
-        claim.amount += amount
-        claim.list[claimer.id] = [Game.time + ticks, amount]
+    if (claim.list[claimer.id]) { return true }
 
-        log.debug(claimer.name, 'claimed container', claimTarget.id, 'for', amount)
+    if (claimTarget.structureType) {
+      switch (claimTarget.structureType) {
+        case STRUCTURE_STORAGE:
+        // fall
+        case STRUCTURE_CONTAINER:
+          if ((claimTarget as Container).store.energy - claim.amount >= amount) {
+            claim.amount += amount
+            claim.list[claimer.id] = [Game.time + ticks, amount]
 
-        return true
+            log.debug(claimer.name, 'claimed container/storage', claimTarget.id, 'for', amount)
+
+            return true
+          }
+          break
+        case STRUCTURE_EXTENSION:
+        // fall
+        case STRUCTURE_SPAWN:
+          debugger;  
+          if ((claimTarget as Spawn).energyCapacity > (claimTarget as Spawn).energy + claim.amount) {
+            claim.amount += amount
+            claim.list[claimer.id] = [Game.time + ticks, amount]
+
+            log.debug(claimer.name, 'claimed extension/spawn', claimTarget.id, 'for', amount)
+
+            return true
+          }
+          break
       }
     } else if (claimTarget.amount) {
       if (claimTarget.amount - claim.amount > amount) {
         claim.amount += amount
         claim.list[claimer.id] = [Game.time + ticks, amount]
 
-        log.debug(claimer.name, 'claimed resource', claimTarget.id, 'for', amount)
+        log.debug(claimer.name, 'claimed resource', claimTarget.id, 'for', amount + 50)
 
         return true
       }
@@ -67,16 +88,21 @@ class Claims {
 
     if (claim.list[claimer.id]) { return false }
 
-    if (claimTarget.store) {
-      if (claimTarget.store.energy - claim.amount > amount) {
-        return true
+    if (claimTarget.structureType) {
+      switch (claimTarget.structureType) {
+        case STRUCTURE_STORAGE:
+        // fall
+        case STRUCTURE_CONTAINER:
+          return ((claimTarget as Container).store.energy - claim.amount >= amount + 50)
+        case STRUCTURE_EXTENSION:
+        // fall
+        case STRUCTURE_SPAWN:
+          return ((claimTarget as Spawn).energyCapacity > (claimTarget as Spawn).energy + claim.amount)
       }
-    } if (claimTarget.amount) {
-      if (claimTarget.amount - claim.amount > amount) {
-        return true
-      }
+    } else if (claimTarget.amount) {
+      return (claimTarget.amount - claim.amount > amount)
     } else {
-      return claim.amount == 0
+      return (claim.amount == 0)
     }
   }
 
@@ -98,7 +124,7 @@ class Claims {
   }
 }
 
-export interface IClaimable { id: string, amount?: number, store?: { energy: number }, ticksToRegeneration?: any }
+export interface IClaimable { id: string, amount?: number, structureType?: string }
 export interface IClaimer { id: string, name?: string }
 export let claims = new Claims()
 export class DummyClaimer implements IClaimer {

@@ -3339,19 +3339,37 @@ module.exports =
 	    }
 	    set(claimer, claimTarget, amount = 1, ticks = 100) {
 	        let claim = this._getClaimMemory(claimTarget.id);
-	        if (claimTarget.store) {
-	            if (claimTarget.store.energy - claim.amount > amount) {
-	                claim.amount += amount;
-	                claim.list[claimer.id] = [Game.time + ticks, amount];
-	                log_1.log.debug(claimer.name, 'claimed container', claimTarget.id, 'for', amount);
-	                return true;
+	        if (claim.list[claimer.id]) {
+	            return true;
+	        }
+	        if (claimTarget.structureType) {
+	            switch (claimTarget.structureType) {
+	                case STRUCTURE_STORAGE:
+	                case STRUCTURE_CONTAINER:
+	                    if (claimTarget.store.energy - claim.amount >= amount) {
+	                        claim.amount += amount;
+	                        claim.list[claimer.id] = [Game.time + ticks, amount];
+	                        log_1.log.debug(claimer.name, 'claimed container/storage', claimTarget.id, 'for', amount);
+	                        return true;
+	                    }
+	                    break;
+	                case STRUCTURE_EXTENSION:
+	                case STRUCTURE_SPAWN:
+	                    debugger;
+	                    if (claimTarget.energyCapacity > claimTarget.energy + claim.amount) {
+	                        claim.amount += amount;
+	                        claim.list[claimer.id] = [Game.time + ticks, amount];
+	                        log_1.log.debug(claimer.name, 'claimed extension/spawn', claimTarget.id, 'for', amount);
+	                        return true;
+	                    }
+	                    break;
 	            }
 	        }
 	        else if (claimTarget.amount) {
 	            if (claimTarget.amount - claim.amount > amount) {
 	                claim.amount += amount;
 	                claim.list[claimer.id] = [Game.time + ticks, amount];
-	                log_1.log.debug(claimer.name, 'claimed resource', claimTarget.id, 'for', amount);
+	                log_1.log.debug(claimer.name, 'claimed resource', claimTarget.id, 'for', amount + 50);
 	                return true;
 	            }
 	        }
@@ -3379,18 +3397,21 @@ module.exports =
 	        if (claim.list[claimer.id]) {
 	            return false;
 	        }
-	        if (claimTarget.store) {
-	            if (claimTarget.store.energy - claim.amount > amount) {
-	                return true;
+	        if (claimTarget.structureType) {
+	            switch (claimTarget.structureType) {
+	                case STRUCTURE_STORAGE:
+	                case STRUCTURE_CONTAINER:
+	                    return (claimTarget.store.energy - claim.amount >= amount + 50);
+	                case STRUCTURE_EXTENSION:
+	                case STRUCTURE_SPAWN:
+	                    return (claimTarget.energyCapacity > claimTarget.energy + claim.amount);
 	            }
 	        }
-	        if (claimTarget.amount) {
-	            if (claimTarget.amount - claim.amount > amount) {
-	                return true;
-	            }
+	        else if (claimTarget.amount) {
+	            return (claimTarget.amount - claim.amount > amount);
 	        }
 	        else {
-	            return claim.amount == 0;
+	            return (claim.amount == 0);
 	        }
 	    }
 	    clean() {
@@ -3506,13 +3527,13 @@ module.exports =
 	        .value();
 	    return sources;
 	};
-	Room.prototype.getAvailableResources = function (claimer = Claims_1.dummyClaimer) {
+	Room.prototype.getAvailableResources = function (claimer = Claims_1.dummyClaimer, amount = 1) {
 	    if (!this.memory.resources) {
 	        return [];
 	    }
 	    let resources = _(this.memory.resources)
-	        .map((sourceId) => { return Game.getObjectById(sourceId); })
-	        .filter((source) => { return source != undefined && Claims_1.claims.isClaimable(claimer, source, 1); })
+	        .map((ressourceId) => { return Game.getObjectById(ressourceId); })
+	        .filter((ressource) => { return ressource != undefined && Claims_1.claims.isClaimable(claimer, ressource, amount); })
 	        .value();
 	    return resources;
 	};
@@ -3592,7 +3613,7 @@ module.exports =
 	            for (let creepType in roomLevel.availableCreeps) {
 	                switch (creepType) {
 	                    case 'allrounder':
-	                        if ((creeps[creepType] || 0) < roomLevel.availableCreeps[creepType]) {
+	                        if ((creeps[creepType] || 0) < creeps['harvester-energy'] * roomLevel.availableCreeps[creepType]) {
 	                            builder = CreepConfig.Roles[creepType];
 	                        }
 	                        break;
@@ -3624,7 +3645,7 @@ module.exports =
 	};
 	tasks['_scanResources'] = function () {
 	    let resources = [];
-	    this.find(FIND_MY_STRUCTURES, {
+	    this.find(FIND_STRUCTURES, {
 	        filter: (s) => {
 	            if (s.structureType == STRUCTURE_CONTAINER) {
 	                resources.push(s.id);
@@ -3798,7 +3819,7 @@ module.exports =
 	        name: 'Feudal',
 	        maxSlaves: 0,
 	        availableCreeps: {
-	            'allrounder': 2,
+	            'allrounder': 1.5,
 	            'harvester-energy': true,
 	        },
 	        require: {
@@ -3932,18 +3953,25 @@ module.exports =
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	const log_1 = __webpack_require__(/*! ../support/log */ 3);
 	const creep_1 = __webpack_require__(/*! ../../config/creep */ 20);
 	const creep_bt_1 = __webpack_require__(/*! ../roles/creep.bt */ 22);
+	const Blackboard_1 = __webpack_require__(/*! ./Blackboard */ 39);
 	Creep.prototype.run = function () {
 	    if (this.spawning) {
 	        return;
 	    }
 	    let roleName = this.getRole();
-	    if (roleTrees[roleName] == undefined) {
+	    let tree = roleTrees[roleName];
+	    if (tree == undefined) {
 	        throw 'Role tree not found ' + roleName;
 	    }
-	    let blackboard = new creep_bt_1.Blackboard(this.memory);
-	    roleTrees[roleName].tick(this, blackboard);
+	    let debug = [];
+	    let blackboard = new Blackboard_1.Blackboard(this.memory);
+	    tree.tick(this, blackboard, debug);
+	    if (tree.error) {
+	        log_1.log.error(tree.error);
+	    }
 	};
 	Creep.prototype.getRole = function () {
 	    let roleName = this.memory.role;
@@ -3966,11 +3994,15 @@ module.exports =
 	    return null;
 	};
 	let roleTrees = {
-	    'allrounder': creep_bt_1.loadTree(__webpack_require__(/*! allrounder */ 39), creep_bt_1.customNodes),
-	    'harvester-energy': creep_bt_1.loadTree(__webpack_require__(/*! harvester-energy */ 40), creep_bt_1.customNodes),
+	    'allrounder': creep_bt_1.loadTree(__webpack_require__(/*! allrounder */ 40), creep_bt_1.customNodes),
+	    'harvester-energy': creep_bt_1.loadTree(__webpack_require__(/*! harvester-energy */ 41), creep_bt_1.customNodes),
+	    'move': creep_bt_1.loadTree(__webpack_require__(/*! move */ 42), creep_bt_1.customNodes),
 	};
-	roleTrees['allrounder'].id = 'allrounder';
-	roleTrees['harvester-energy'].id = 'harvester-energy';
+	for (let treeName in roleTrees) {
+	    let tree = roleTrees[treeName];
+	    tree.id = treeName;
+	    tree.knownTrees = roleTrees;
+	}
 
 
 /***/ },
@@ -3982,39 +4014,61 @@ module.exports =
 
 	"use strict";
 	const b3 = __webpack_require__(/*! ../../lib/behavior3ts */ 23);
+	const log_1 = __webpack_require__(/*! ../support/log */ 3);
 	const Claims_1 = __webpack_require__(/*! ../classes/Claims */ 16);
 	var customNodes;
 	(function (customNodes) {
 	    const Action = b3.Action;
 	    const STATUS = b3.STATUS;
-	    class SearchSources extends Action {
+	    class FindSources extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'FindSources';
+	        }
+	        open(tick) {
+	            let creep = tick.target;
+	            delete creep.memory.target;
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            let sources = creep.room.getAvailableSources();
-	            let source;
 	            if (sources.length > 0) {
-	                source = creep.pos.findClosestByPath(sources);
-	                creep.memory.target = source.id;
-	                return STATUS.SUCCESS;
+	                let source = creep.pos.findClosestByPath(sources);
+	                if (source) {
+	                    creep.memory.target = source.id;
+	                    creep.memory.actionRange = 1;
+	                    return STATUS.SUCCESS;
+	                }
 	            }
 	            return STATUS.FAILURE;
 	        }
 	    }
-	    customNodes.SearchSources = SearchSources;
-	    class GetResources extends Action {
+	    customNodes.FindSources = FindSources;
+	    class FindResources extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'FindResources';
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
-	            let sources = creep.room.getAvailableResources();
+	            let sources = creep.room.getAvailableResources(creep, creep.carryCapacity);
 	            if (sources.length > 0) {
 	                let source = creep.pos.findClosestByPath(sources);
 	                creep.memory.target = source.id;
+	                creep.memory.actionRange = 1;
+	                creep.say('\u25EF');
 	                return STATUS.SUCCESS;
 	            }
+	            creep.say('\u274c');
 	            return STATUS.FAILURE;
 	        }
 	    }
-	    customNodes.GetResources = GetResources;
+	    customNodes.FindResources = FindResources;
 	    class HasTarget extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'HasTarget';
+	        }
 	        tick(tick) {
 	            if (tick.target.getTarget()) {
 	                return STATUS.SUCCESS;
@@ -4024,13 +4078,18 @@ module.exports =
 	    }
 	    customNodes.HasTarget = HasTarget;
 	    class FindPath extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'FindPath';
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            let target = creep.getTarget();
 	            if (target == undefined) {
 	                return STATUS.FAILURE;
 	            }
-	            let path = creep.pos.findPathTo(target);
+	            let opts = { maxOps: 200 };
+	            let path = creep.pos.findPathTo(target, opts);
 	            if (path.length == 0) {
 	                return STATUS.FAILURE;
 	            }
@@ -4040,21 +4099,21 @@ module.exports =
 	    }
 	    customNodes.FindPath = FindPath;
 	    class Move extends Action {
-	        constructor(props, id) {
-	            super(props, id);
-	            this.range = 1;
-	            this.range = props['range'] || this.range;
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'Move';
 	        }
 	        tick(tick) {
 	            if (tick.target.memory.path == undefined) {
 	                return STATUS.FAILURE;
 	            }
-	            let target = tick.target.getTarget();
+	            let creep = tick.target;
+	            let target = creep.getTarget();
 	            if (target == undefined) {
 	                return STATUS.FAILURE;
 	            }
 	            let status = STATUS.RUNNING;
-	            switch (tick.target.moveByPath(tick.target.memory.path)) {
+	            switch (creep.moveByPath(creep.memory.path)) {
 	                case OK:
 	                    break;
 	                case ERR_TIRED:
@@ -4062,7 +4121,8 @@ module.exports =
 	                default:
 	                    status = STATUS.FAILURE;
 	            }
-	            if (tick.target.pos.getRangeTo(target) <= this.range) {
+	            let actionRange = creep.memory.actionRange | 1;
+	            if (creep.pos.getRangeTo(target) <= actionRange) {
 	                status = STATUS.SUCCESS;
 	            }
 	            return status;
@@ -4070,6 +4130,10 @@ module.exports =
 	    }
 	    customNodes.Move = Move;
 	    class Harvest extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'Harvest';
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            if (creep.carry.energy == creep.carryCapacity) {
@@ -4089,6 +4153,10 @@ module.exports =
 	    }
 	    customNodes.Harvest = Harvest;
 	    class TakeResources extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'TakeResources';
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            if (creep.carry.energy == creep.carryCapacity) {
@@ -4111,10 +4179,17 @@ module.exports =
 	    class Claim extends Action {
 	        constructor(props, id) {
 	            super(props, id);
+	            this.name = 'Claim';
 	            this.claimTarget = 'target';
 	            this.ticks = 100;
+	            this.lifetime = false;
+	            this.invert = false;
+	            this.resource = RESOURCE_ENERGY;
 	            this.claimTarget = props['target'] || this.claimTarget;
 	            this.ticks = props['ticks'] || this.ticks;
+	            this.lifetime = props['lifetime'] != undefined ? props['lifetime'] == 'true' : this.lifetime;
+	            this.invert = props['invert'] != undefined ? props['invert'] == 'true' : this.invert;
+	            this.resource = props['resource'] != undefined ? props['resource'] : this.resource;
 	        }
 	        tick(tick) {
 	            let creep = tick.target;
@@ -4122,7 +4197,13 @@ module.exports =
 	            if (target == undefined) {
 	                return STATUS.ERROR;
 	            }
-	            let status = Claims_1.claims.set(creep, target, creep.carryCapacity - creep.carry.energy, target instanceof Source ? creep.ticksToLive : this.ticks) ? STATUS.SUCCESS : STATUS.FAILURE;
+	            let amount = this.invert ? creep.carry[this.resource] : creep.carryCapacity - creep.carry[this.resource];
+	            let ticksClaimed = this.lifetime ? creep.ticksToLive : this.ticks;
+	            let status = Claims_1.claims.set(creep, target, amount, ticksClaimed) ? STATUS.SUCCESS : STATUS.FAILURE;
+	            if (status != STATUS.SUCCESS) {
+	                log_1.log.info(creep.name, 'failed to claim', target.id);
+	                creep.say('\u25CC');
+	            }
 	            return status;
 	        }
 	    }
@@ -4130,7 +4211,9 @@ module.exports =
 	    class Unclaim extends Action {
 	        constructor(props, id) {
 	            super(props, id);
-	            this.claimTarget = props['target'];
+	            this.name = 'Unclaim';
+	            this.claimTarget = 'target';
+	            this.claimTarget = props['target'] != undefined ? props['target'] : this.claimTarget;
 	        }
 	        tick(tick) {
 	            let creep = tick.target;
@@ -4144,64 +4227,102 @@ module.exports =
 	    }
 	    customNodes.Unclaim = Unclaim;
 	    class Carry extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'Carry';
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            if (creep.carry.energy == 0) {
-	                return STATUS.SUCCESS;
-	            }
-	            let target = creep.getTarget();
-	            if (target == undefined) {
 	                return STATUS.FAILURE;
 	            }
-	            creep.transfer(target, RESOURCE_ENERGY);
+	            let target = creep.getTarget();
+	            if (target) {
+	                switch (creep.transfer(target, RESOURCE_ENERGY)) {
+	                    case OK:
+	                    case ERR_FULL:
+	                        return STATUS.SUCCESS;
+	                    default:
+	                        return STATUS.FAILURE;
+	                }
+	            }
 	            return STATUS.SUCCESS;
 	        }
 	    }
 	    customNodes.Carry = Carry;
-	    class GetCarryTarget extends Action {
+	    class FindCarryTarget extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'FindCarryTarget';
+	        }
+	        open(tick) {
+	            let creep = tick.target;
+	            delete creep.memory.target;
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            if (creep.carry.energy == 0) {
 	                return STATUS.FAILURE;
 	            }
-	            let target = creep.pos.findClosestByRange(FIND_MY_SPAWNS, { filter: (s) => { return s.energy < s.energyCapacity; } });
+	            let target = creep.pos.findClosestByRange(FIND_MY_SPAWNS, { filter: (s) => { return s.energy < s.energyCapacity && Claims_1.claims.isClaimable(creep, s, creep.carry.energy | 50); } });
 	            if (target) {
 	                creep.memory.target = target.id;
+	                creep.memory.actionRange = 1;
 	                return STATUS.SUCCESS;
 	            }
-	            target = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, { filter: (s) => { return s.structureType == STRUCTURE_EXTENSION && s.energy < s.energyCapacity; } });
+	            target = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, { filter: (s) => { return s.structureType == STRUCTURE_EXTENSION && s.energy < s.energyCapacity && Claims_1.claims.isClaimable(creep, s, creep.carry.energy | 50); } });
 	            if (target) {
 	                creep.memory.target = target.id;
+	                creep.memory.actionRange = 1;
 	                return STATUS.SUCCESS;
 	            }
 	            return STATUS.FAILURE;
 	        }
 	    }
-	    customNodes.GetCarryTarget = GetCarryTarget;
+	    customNodes.FindCarryTarget = FindCarryTarget;
 	    class Upgrade extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'Upgrade';
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            if (creep.carry.energy == 0) {
 	                return STATUS.SUCCESS;
 	            }
 	            let target = creep.getTarget();
-	            creep.upgradeController(target);
+	            if (creep.upgradeController(target) != OK) {
+	                return STATUS.FAILURE;
+	            }
 	            return STATUS.RUNNING;
 	        }
 	    }
 	    customNodes.Upgrade = Upgrade;
-	    class GetUpgradeTarget extends Action {
+	    class FindUpgradeTarget extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'FindUpgradeTarget';
+	        }
+	        open(tick) {
+	            let creep = tick.target;
+	            delete creep.memory.target;
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            if (creep.carry.energy == 0) {
 	                return STATUS.FAILURE;
 	            }
 	            creep.memory.target = creep.room.controller.id;
+	            creep.memory.actionRange = 3;
 	            return STATUS.SUCCESS;
 	        }
 	    }
-	    customNodes.GetUpgradeTarget = GetUpgradeTarget;
+	    customNodes.FindUpgradeTarget = FindUpgradeTarget;
 	    class StoreNear extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'StoreNear';
+	        }
 	        tick(tick) {
 	            let creep = tick.target;
 	            let opts = { filter: (s) => { return s.structureType == STRUCTURE_CONTAINER && _.sum(s.store) < s.storeCapacity; } };
@@ -4216,50 +4337,85 @@ module.exports =
 	        }
 	    }
 	    customNodes.StoreNear = StoreNear;
-	})(customNodes = exports.customNodes || (exports.customNodes = {}));
-	class Blackboard {
-	    constructor(mem) {
-	        if (mem['blackboard'] == undefined) {
-	            mem['blackboard'] = {};
+	    class CarriesResource extends Action {
+	        constructor(props, id) {
+	            super(props, id);
+	            this.name = 'CarriesResource';
+	            this.resource = RESOURCE_ENERGY;
+	            this.resource = props['resource'] != undefined ? props['resource'] : this.resource;
 	        }
-	        this._memory = mem['blackboard'];
-	        if (this._memory.tree == undefined) {
-	            this._memory.tree = {};
-	        }
-	        if (this._memory.base == undefined) {
-	            this._memory.base = {};
-	        }
-	    }
-	    _getTreeMemory(treeScope) {
-	        if (this._memory.tree[treeScope] == undefined) {
-	            this._memory.tree[treeScope] = {};
-	        }
-	        return this._memory.tree[treeScope];
-	    }
-	    _getNodeMemory(mem, nodeScope) {
-	        if (mem[nodeScope] == undefined) {
-	            mem[nodeScope] = {};
-	        }
-	        return mem[nodeScope];
-	    }
-	    _getMemory(treeScope, nodeScope) {
-	        if (treeScope) {
-	            var memory = this._getTreeMemory(treeScope);
-	            if (nodeScope) {
-	                return this._getNodeMemory(memory, nodeScope);
+	        tick(tick) {
+	            let creep = tick.target;
+	            if (creep.carry[this.resource] > 0) {
+	                return STATUS.SUCCESS;
 	            }
-	            return memory;
+	            return STATUS.FAILURE;
 	        }
-	        return this._memory.base;
 	    }
-	    set(key, value, treeScope, nodeScope) {
-	        this._getMemory(treeScope ? treeScope.toString() : undefined, nodeScope ? nodeScope.toString() : undefined)[key] = value;
+	    customNodes.CarriesResource = CarriesResource;
+	    class FindConstruction extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'FindConstruction';
+	        }
+	        open(tick) {
+	            let creep = tick.target;
+	            delete creep.memory.target;
+	        }
+	        tick(tick) {
+	            let creep = tick.target;
+	            if (creep.carry.energy == 0) {
+	                return STATUS.FAILURE;
+	            }
+	            let o = creep.pos.findClosestByRange(FIND_CONSTRUCTION_SITES);
+	            if (o) {
+	                creep.memory.target = o.id;
+	                creep.memory.actionRange = 3;
+	                return STATUS.SUCCESS;
+	            }
+	            return STATUS.FAILURE;
+	        }
 	    }
-	    get(key, treeScope, nodeScope) {
-	        return this._getMemory(treeScope ? treeScope.toString() : undefined, nodeScope ? nodeScope.toString() : undefined)[key];
+	    customNodes.FindConstruction = FindConstruction;
+	    class BuildConstruction extends Action {
+	        constructor() {
+	            super(...arguments);
+	            this.name = 'BuildConstruction';
+	        }
+	        tick(tick) {
+	            let creep = tick.target;
+	            if (creep.carry.energy == 0) {
+	                return STATUS.SUCCESS;
+	            }
+	            let target = creep.getTarget();
+	            if (target) {
+	                if (creep.build(target) != OK) {
+	                    return STATUS.FAILURE;
+	                }
+	                return STATUS.RUNNING;
+	            }
+	            return STATUS.SUCCESS;
+	        }
 	    }
-	}
-	exports.Blackboard = Blackboard;
+	    customNodes.BuildConstruction = BuildConstruction;
+	    class RunTree extends Action {
+	        constructor(props, id) {
+	            super(props, id);
+	            this.name = 'RunTree';
+	            this.tree = props['tree'];
+	        }
+	        tick(tick) {
+	            let tree = tick.tree.knownTrees[this.tree];
+	            if (tree) {
+	                return tree.tick(tick.target, tick.blackboard);
+	            }
+	            else {
+	                return STATUS.ERROR;
+	            }
+	        }
+	    }
+	    customNodes.RunTree = RunTree;
+	})(customNodes = exports.customNodes || (exports.customNodes = {}));
 	function loadTree(data, names = {}) {
 	    let tree = new b3.BehaviorTree();
 	    let nodes = {};
@@ -4390,7 +4546,14 @@ module.exports =
 	        if (!(open && open[this.id] != undefined)) {
 	            this._open(tick);
 	        }
-	        let status = this._tick(tick);
+	        let status;
+	        try {
+	            status = this._tick(tick);
+	        }
+	        catch (err) {
+	            status = helper_1.STATUS.ERROR;
+	            tick.tree.error = 'Error in ' + this.name + ' ' + err;
+	        }
 	        if (status !== helper_1.STATUS.RUNNING) {
 	            this._close(tick);
 	            if (open) {
@@ -4398,6 +4561,9 @@ module.exports =
 	            }
 	        }
 	        this._exit(tick);
+	        if (tick.debug) {
+	            tick.debug.push([this.id, this.name, helper_1.STATUS[status]].join(' '));
+	        }
 	        return status;
 	    }
 	    _enter(tick) {
@@ -4422,6 +4588,7 @@ module.exports =
 	        if (this.close) {
 	            this.close(tick);
 	        }
+	        tick.blackboard.clear(tick.tree.id, this.id);
 	    }
 	    _exit(tick) {
 	        if (this.exit) {
@@ -4444,6 +4611,7 @@ module.exports =
 	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class BehaviorTree {
 	    constructor() {
+	        this.knownTrees = {};
 	        this.id = helper_1.createUUID();
 	        this.title = 'A behavior tree';
 	        this.description = 'default';
@@ -4451,11 +4619,12 @@ module.exports =
 	        this.root = '';
 	        this.nodes = {};
 	    }
-	    tick(target, blackboard) {
+	    tick(target, blackboard, debug) {
 	        let tick = new Tick_1.Tick();
 	        tick.target = target;
 	        tick.blackboard = blackboard;
 	        tick.tree = this;
+	        tick.debug = debug;
 	        let status = this.nodes[this.root].execute(tick);
 	        let lastOpenNodes = _.map(blackboard.get('openNodes', this.id) || [], (_v, nodeId) => { return this.nodes[nodeId]; });
 	        let currOpenNodes = tick.openNodes.slice(0);
@@ -4567,6 +4736,8 @@ module.exports =
 	class Wait extends Types_1.Action {
 	    constructor(props, id) {
 	        super(props, id);
+	        this.name = 'Wait';
+	        this.title = 'Wait some time';
 	        this.endTime = props.time != undefined ? props.time : 0;
 	    }
 	    open(tick) {
@@ -4596,6 +4767,10 @@ module.exports =
 	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
 	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class MemPriority extends Types_1.Composite {
+	    constructor() {
+	        super(...arguments);
+	        this.name = 'MemPriority';
+	    }
 	    open(tick) {
 	        tick.blackboard.set('runningChild', 0, tick.tree.id, this.id);
 	    }
@@ -4627,6 +4802,10 @@ module.exports =
 	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
 	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class MemSequence extends Types_1.Composite {
+	    constructor() {
+	        super(...arguments);
+	        this.name = 'MemSequence';
+	    }
 	    open(tick) {
 	        tick.blackboard.set('runningChild', 0, tick.tree.id, this.id);
 	    }
@@ -4658,6 +4837,10 @@ module.exports =
 	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
 	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class Priority extends Types_1.Composite {
+	    constructor() {
+	        super(...arguments);
+	        this.name = 'Priority';
+	    }
 	    tick(tick) {
 	        for (let i = 0; i < this.children.length; i++) {
 	            var status = tick.tree.nodes[this.children[i]].execute(tick);
@@ -4682,6 +4865,10 @@ module.exports =
 	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
 	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class Sequence extends Types_1.Composite {
+	    constructor() {
+	        super(...arguments);
+	        this.name = 'Sequence';
+	    }
 	    tick(tick) {
 	        for (let i = 0; i < this.children.length; i++) {
 	            var status = tick.tree.nodes[this.children[i]].execute(tick);
@@ -4706,6 +4893,10 @@ module.exports =
 	const Types_1 = __webpack_require__(/*! ../core/Types */ 28);
 	const helper_1 = __webpack_require__(/*! ../helper */ 24);
 	class Inverter extends Types_1.Decorator {
+	    constructor() {
+	        super(...arguments);
+	        this.name = 'Inverter';
+	    }
 	    tick(tick) {
 	        if (this.child === '') {
 	            return helper_1.STATUS.ERROR;
@@ -4736,6 +4927,7 @@ module.exports =
 	class Limiter extends Types_1.Decorator {
 	    constructor(props, id) {
 	        super(props, id);
+	        this.name = 'Limiter';
 	        this.maxLoop = props['maxLoop'];
 	    }
 	    open(tick) {
@@ -4772,6 +4964,7 @@ module.exports =
 	class RepeatUntilSuccess extends Types_1.Decorator {
 	    constructor(props, id) {
 	        super(props, id);
+	        this.name = 'RepeatUntilSuccess';
 	        this.maxLoop = props['maxLoop'];
 	    }
 	    open(tick) {
@@ -4812,6 +5005,7 @@ module.exports =
 	class RepeatUntilFailure extends Types_1.Decorator {
 	    constructor(props, id) {
 	        super(props, id);
+	        this.name = 'RepeatUntilFailure';
 	        this.maxLoop = props['maxLoop'];
 	    }
 	    open(tick) {
@@ -4852,6 +5046,7 @@ module.exports =
 	class Repeater extends Types_1.Decorator {
 	    constructor(props, id) {
 	        super(props, id);
+	        this.name = 'Repeater';
 	        this.maxLoop = props['maxLoop'];
 	    }
 	    open(tick) {
@@ -4881,6 +5076,64 @@ module.exports =
 
 /***/ },
 /* 39 */
+/*!**********************************************!*\
+  !*** ./src/components/classes/Blackboard.ts ***!
+  \**********************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	class Blackboard {
+	    constructor(mem) {
+	        this._memory = mem;
+	        if (this._memory.tree == undefined) {
+	            this._memory.tree = {};
+	        }
+	    }
+	    _getTreeMemory(treeScope) {
+	        if (this._memory.tree[treeScope] == undefined) {
+	            this._memory.tree[treeScope] = {};
+	        }
+	        return this._memory.tree[treeScope];
+	    }
+	    _getNodeMemory(mem, nodeScope) {
+	        if (mem[nodeScope] == undefined) {
+	            mem[nodeScope] = {};
+	        }
+	        return mem[nodeScope];
+	    }
+	    _getMemory(treeScope, nodeScope) {
+	        if (treeScope) {
+	            var memory = this._getTreeMemory(treeScope);
+	            if (nodeScope) {
+	                return this._getNodeMemory(memory, nodeScope);
+	            }
+	            return memory;
+	        }
+	        if (this._memory.base == undefined) {
+	            this._memory.base = {};
+	        }
+	        return this._memory.base;
+	    }
+	    set(key, value, treeScope, nodeScope) {
+	        this._getMemory(treeScope ? treeScope.toString() : undefined, nodeScope ? nodeScope.toString() : undefined)[key] = value;
+	    }
+	    get(key, treeScope, nodeScope) {
+	        return this._getMemory(treeScope ? treeScope.toString() : undefined, nodeScope ? nodeScope.toString() : undefined)[key];
+	    }
+	    clear(treeScope, nodeScope) {
+	        treeScope = treeScope.toString();
+	        nodeScope = nodeScope.toString();
+	        let treeMem = this._getTreeMemory(treeScope);
+	        if (treeMem) {
+	            delete treeMem[nodeScope];
+	        }
+	    }
+	}
+	exports.Blackboard = Blackboard;
+
+
+/***/ },
+/* 40 */
 /*!*****************************!*\
   !*** external "allrounder" ***!
   \*****************************/
@@ -4889,13 +5142,22 @@ module.exports =
 	module.exports = require("allrounder");
 
 /***/ },
-/* 40 */
+/* 41 */
 /*!***********************************!*\
   !*** external "harvester-energy" ***!
   \***********************************/
 /***/ function(module, exports) {
 
 	module.exports = require("harvester-energy");
+
+/***/ },
+/* 42 */
+/*!***********************!*\
+  !*** external "move" ***!
+  \***********************/
+/***/ function(module, exports) {
+
+	module.exports = require("move");
 
 /***/ }
 /******/ ]);

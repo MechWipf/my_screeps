@@ -3,7 +3,7 @@ import { Decorator } from '../core/Types'
 import { STATUS, Properties } from '../helper'
 
 export class RepeatUntilSuccess extends Decorator {
-  name: 'RepeatUntilSuccess'
+  name: string = 'RepeatUntilSuccess'
 
   maxLoop: number
 

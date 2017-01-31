@@ -3,7 +3,7 @@ import { Composite } from '../core/Types'
 import { STATUS } from '../helper'
 
 export class MemSequence extends Composite {
-  name: 'MemSequence'
+  name: string = 'MemSequence'
 
   open(tick: Tick) {
     tick.blackboard.set('runningChild', 0, tick.tree.id, this.id)

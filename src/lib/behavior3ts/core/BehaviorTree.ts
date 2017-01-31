@@ -9,6 +9,8 @@ export class BehaviorTree {
   properties: { [k: string]: string }
   root: string
   nodes: BaseNodeMap
+  knownTrees: { [k: string]: any } = {}
+  error?: any
 
   constructor() {
     this.id = createUUID()
@@ -19,12 +21,13 @@ export class BehaviorTree {
     this.nodes = {}
   }
 
-  tick(target: any, blackboard: Blackboard) {
+  tick(target: any, blackboard: Blackboard, debug?: any) {
 
     let tick = new Tick()
     tick.target = target
     tick.blackboard = blackboard
     tick.tree = this
+    tick.debug = debug
 
     let status = this.nodes[this.root].execute(tick)
     let lastOpenNodes = _.map(blackboard.get('openNodes', this.id) || [], (_v: any, nodeId: string) => { return this.nodes[nodeId] })

@@ -33,7 +33,7 @@ declare global {
 
     // Resources
     getAvailableSources(): Source[]
-    getAvailableResources(): Array<Resource | RoomObject>
+    getAvailableResources(claimer: IClaimer, amount: number): Array<Resource | RoomObject>
   }
 }
 // We extend ITaskable so we should get the methods too
@@ -123,12 +123,12 @@ Room.prototype.getAvailableSources = function (this: Room, claimer: IClaimer = d
   return sources
 }
 
-Room.prototype.getAvailableResources = function (this: Room, claimer: IClaimer = dummyClaimer) {
+Room.prototype.getAvailableResources = function (this: Room, claimer: IClaimer = dummyClaimer, amount: number = 1) {
   if (!this.memory.resources) { return [] }
 
   let resources = _(this.memory.resources)
-    .map((sourceId: string) => { return Game.getObjectById(sourceId) })
-    .filter((source: IClaimable) => { return source != undefined && claims.isClaimable(claimer, source, 1) })
+    .map((ressourceId: string) => { return Game.getObjectById(ressourceId) })
+    .filter((ressource: IClaimable) => { return ressource != undefined && claims.isClaimable(claimer, ressource, amount) })
     .value() as Resource[]
   return resources
 }
@@ -234,7 +234,7 @@ tasks[RoomConfig.TASK_MANAGE_ROOM] = function (this: Room, task: Task) {
       for (let creepType in roomLevel.availableCreeps) {
         switch (creepType) {
           case 'allrounder':
-            if ((creeps[creepType] || 0) < roomLevel.availableCreeps[creepType]) {
+            if ((creeps[creepType] || 0) < creeps['harvester-energy'] * <number>roomLevel.availableCreeps[creepType]) {
               builder = CreepConfig.Roles[creepType]
             }
             break
@@ -269,7 +269,7 @@ tasks[RoomConfig.TASK_MANAGE_ROOM] = function (this: Room, task: Task) {
 tasks['_scanResources'] = function (this: Room) {
   let resources: Array<any> = []
 
-  this.find(FIND_MY_STRUCTURES, {
+  this.find(FIND_STRUCTURES, {
     filter: (s: Structure) => {
       if (s.structureType == STRUCTURE_CONTAINER) { resources.push(s.id) }
     }

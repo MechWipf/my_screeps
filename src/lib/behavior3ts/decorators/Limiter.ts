@@ -3,7 +3,7 @@ import { Decorator } from '../core/Types'
 import { STATUS, Properties } from '../helper'
 
 export class Limiter extends Decorator {
-  name: 'Limiter'
+  name: string = 'Limiter'
 
   maxLoop: number
 

@@ -1,50 +1,67 @@
 import * as b3 from '../../lib/behavior3ts'
-import { } from '../support/log'
+import { log } from '../support/log'
 import { claims } from '../classes/Claims'
 
 export namespace customNodes {
   const Action = b3.Action
   const STATUS = b3.STATUS
 
-  // SearchSources
-  export class SearchSources extends Action {
+  // FindSources
+  export class FindSources extends Action {
+    name: string = 'FindSources'
+
+    open(tick: b3.Tick) {
+      let creep = tick.target as Creep
+      delete creep.memory.target
+    }
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
       let sources = creep.room.getAvailableSources()
 
-      let source: Source
       if (sources.length > 0) {
-        source = creep.pos.findClosestByPath(sources)
-        creep.memory.target = source.id
-        return STATUS.SUCCESS
+        let source = creep.pos.findClosestByPath(sources)
+        if (source) {
+          creep.memory.target = source.id
+          creep.memory.actionRange = 1
+          return STATUS.SUCCESS
+        }
       }
 
       return STATUS.FAILURE
     }
   }
-  // end SearchSources
+  // end FindSources
 
 
-  // GetResources  
-  export class GetResources extends Action {
+  // FindResources  
+  export class FindResources extends Action {
+    name: string = 'FindResources'
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
-      let sources = creep.room.getAvailableResources()
+      let sources = creep.room.getAvailableResources(creep, creep.carryCapacity)
 
       if (sources.length > 0) {
         let source = creep.pos.findClosestByPath(sources) as Resource
         creep.memory.target = source.id
+        creep.memory.actionRange = 1
+
+        creep.say('\u25EF')
         return STATUS.SUCCESS
       }
 
+      creep.say('\u274c')
       return STATUS.FAILURE
     }
   }
-  // end GetResources
+  // end FindResources
 
 
   // HasTarget
   export class HasTarget extends Action {
+    name: string = 'HasTarget'
+
     tick(tick: b3.Tick) {
       if (tick.target.getTarget()) {
         return STATUS.SUCCESS
@@ -57,12 +74,15 @@ export namespace customNodes {
 
   // FindPath
   export class FindPath extends Action {
+    name: string = 'FindPath'
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
       let target = creep.getTarget()
       if (target == undefined) { return STATUS.FAILURE }
 
-      let path = creep.pos.findPathTo(target)
+      let opts = { maxOps: 200 }
+      let path = creep.pos.findPathTo(target, opts)
       if (path.length == 0) { return STATUS.FAILURE }
       creep.memory.path = Room.serializePath(path)
 
@@ -74,22 +94,18 @@ export namespace customNodes {
 
   // Move
   export class Move extends Action {
-    private range: number = 1
-
-    constructor(props: b3.Properties, id: string) {
-      super(props, id)
-      this.range = <number>props['range'] || this.range
-    }
+    name: string = 'Move'
 
     tick(tick: b3.Tick) {
       if (tick.target.memory.path == undefined) { return STATUS.FAILURE }
+      let creep = tick.target as Creep
 
-      let target = tick.target.getTarget()
+      let target = creep.getTarget()
       if (target == undefined) { return STATUS.FAILURE }
 
       let status = STATUS.RUNNING
 
-      switch (tick.target.moveByPath(tick.target.memory.path)) {
+      switch (creep.moveByPath(creep.memory.path)) {
         case OK:
           break
         case ERR_TIRED:
@@ -98,7 +114,8 @@ export namespace customNodes {
           status = STATUS.FAILURE
       }
 
-      if (tick.target.pos.getRangeTo(target) <= this.range) { status = STATUS.SUCCESS }
+      let actionRange = creep.memory.actionRange | 1
+      if (creep.pos.getRangeTo(target) <= actionRange) { status = STATUS.SUCCESS }
 
       return status
     }
@@ -108,6 +125,8 @@ export namespace customNodes {
 
   // Harvest
   export class Harvest extends Action {
+    name: string = 'Harvest'
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
 
@@ -132,6 +151,8 @@ export namespace customNodes {
 
   // TakeResources
   export class TakeResources extends Action {
+    name: string = 'TakeResources'
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
 
@@ -156,13 +177,21 @@ export namespace customNodes {
 
   // Claim
   export class Claim extends Action {
+    name: string = 'Claim'
+
     claimTarget: string = 'target'
     ticks: number = 100
+    lifetime: boolean = false
+    invert: boolean = false
+    resource: string = RESOURCE_ENERGY
 
     constructor(props: b3.Properties, id: string) {
       super(props, id)
       this.claimTarget = props['target'] as string || this.claimTarget
       this.ticks = props['ticks'] as number || this.ticks
+      this.lifetime = props['lifetime'] != undefined ? props['lifetime'] == 'true' : this.lifetime
+      this.invert = props['invert'] != undefined ? props['invert'] == 'true' : this.invert
+      this.resource = props['resource'] != undefined ? props['resource'] as string : this.resource
     }
 
     tick(tick: b3.Tick) {
@@ -170,12 +199,15 @@ export namespace customNodes {
       let target = Game.getObjectById(creep.memory[this.claimTarget]) as any
       if (target == undefined) { return STATUS.ERROR }
 
-      let status = claims.set(creep, target, creep.carryCapacity - creep.carry.energy, target instanceof Source ? creep.ticksToLive : this.ticks) ? STATUS.SUCCESS : STATUS.FAILURE
-      // if (status == STATUS.SUCCESS) {
-      //   log.debug(creep.name, 'claimed', target.id)
-      // } else {
-      //   log.debug(creep.name, 'failed to claim', target.id)
-      // }
+
+      let amount = this.invert ? creep.carry[this.resource] : creep.carryCapacity - creep.carry[this.resource]
+      let ticksClaimed = this.lifetime ? creep.ticksToLive : this.ticks
+
+      let status = claims.set(creep, target, amount, ticksClaimed) ? STATUS.SUCCESS : STATUS.FAILURE
+      if (status != STATUS.SUCCESS) {
+        log.info(creep.name, 'failed to claim', target.id)
+        creep.say('\u25CC')
+      }
 
       return status
     }
@@ -185,11 +217,13 @@ export namespace customNodes {
 
   // Unclaim  
   export class Unclaim extends Action {
-    claimTarget: string
+    name: string = 'Unclaim'
+
+    claimTarget: string = 'target'
 
     constructor(props: b3.Properties, id: string) {
       super(props, id)
-      this.claimTarget = props['target'] as string
+      this.claimTarget = props['target'] != undefined ? props['target'] as string : this.claimTarget
     }
 
     tick(tick: b3.Tick) {
@@ -207,49 +241,71 @@ export namespace customNodes {
 
   // Carry
   export class Carry extends Action {
+    name: string = 'Carry'
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
 
       if (creep.carry.energy == 0) {
-        return STATUS.SUCCESS
+        return STATUS.FAILURE
       }
 
-      let target = creep.getTarget() as Structure
-      if (target == undefined) { return STATUS.FAILURE }
-      creep.transfer(target, RESOURCE_ENERGY)
+      let target = creep.getTarget() as Extension
+      if (target) {
+        switch (creep.transfer(target, RESOURCE_ENERGY)) {
+          case OK:
+          case ERR_FULL:
+            return STATUS.SUCCESS
+          default:
+            return STATUS.FAILURE
+        }
+      }
 
+      // We assume it is full now, or gone
       return STATUS.SUCCESS
     }
   }
   // end Carry
 
 
-  // GetCarryTarget  
-  export class GetCarryTarget extends Action {
+  // FindCarryTarget  
+  export class FindCarryTarget extends Action {
+    name: string = 'FindCarryTarget'
+
+    open(tick: b3.Tick) {
+      let creep = tick.target as Creep
+      delete creep.memory.target
+    }
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
 
       if (creep.carry.energy == 0) { return STATUS.FAILURE }
 
-      let target: any = creep.pos.findClosestByRange(FIND_MY_SPAWNS, { filter: (s: Spawn) => { return s.energy < s.energyCapacity } })
+      let target: any = creep.pos.findClosestByRange(FIND_MY_SPAWNS, { filter: (s: Spawn) => { return s.energy < s.energyCapacity && claims.isClaimable(creep, s, creep.carry.energy | 50) } })
       if (target) {
         creep.memory.target = target.id
+        creep.memory.actionRange = 1
         return STATUS.SUCCESS
       }
 
-      target = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, { filter: (s: Extension) => { return s.structureType == STRUCTURE_EXTENSION && s.energy < s.energyCapacity } })
+      target = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, { filter: (s: Extension) => { return s.structureType == STRUCTURE_EXTENSION && s.energy < s.energyCapacity && claims.isClaimable(creep, s, creep.carry.energy | 50) } })
       if (target) {
         creep.memory.target = target.id
+        creep.memory.actionRange = 1
         return STATUS.SUCCESS
       }
 
       return STATUS.FAILURE
     }
   }
-  // end GetCarryTarget  
+  // end FindCarryTarget  
+
 
   // Upgrade
   export class Upgrade extends Action {
+    name: string = 'Upgrade'
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
 
@@ -258,7 +314,7 @@ export namespace customNodes {
       }
 
       let target = creep.getTarget() as Controller
-      creep.upgradeController(target)
+      if (creep.upgradeController(target) != OK) { return STATUS.FAILURE }
 
       return STATUS.RUNNING
     }
@@ -266,23 +322,33 @@ export namespace customNodes {
   // end Upgrade
 
 
-  // GetUpgradeTarget  
-  export class GetUpgradeTarget extends Action {
+  // FindUpgradeTarget  
+  export class FindUpgradeTarget extends Action {
+    name: string = 'FindUpgradeTarget'
+
+    open(tick: b3.Tick) {
+      let creep = tick.target as Creep
+      delete creep.memory.target
+    }
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
 
       if (creep.carry.energy == 0) { return STATUS.FAILURE }
 
       creep.memory.target = (creep.room.controller as Structure).id
+      creep.memory.actionRange = 3
 
       return STATUS.SUCCESS
     }
   }
-  // end GetUpgradeTarget  
+  // end FindUpgradeTarget  
 
 
   // StoreNear
   export class StoreNear extends Action {
+    name: string = 'StoreNear'
+
     tick(tick: b3.Tick) {
       let creep = tick.target as Creep
       let opts = { filter: (s: Container) => { return s.structureType == STRUCTURE_CONTAINER && _.sum(s.store) < s.storeCapacity } }
@@ -297,51 +363,106 @@ export namespace customNodes {
       return b3.STATUS.SUCCESS
     }
   }
-}
+  // end StoreNear
 
-export class Blackboard {
-  private _memory: any
-  public constructor(mem: any) {
-    if (mem['blackboard'] == undefined) {
-      mem['blackboard'] = {}
+
+  // CarriesResource  
+  export class CarriesResource extends Action {
+    name: string = 'CarriesResource'
+
+    resource: string = RESOURCE_ENERGY
+
+    constructor(props: b3.Properties, id: string) {
+      super(props, id)
+
+      this.resource = props['resource'] != undefined ? props['resource'] as string : this.resource
     }
 
-    this._memory = mem['blackboard']
-
-    if (this._memory.tree == undefined) { this._memory.tree = {} }
-    if (this._memory.base == undefined) { this._memory.base = {} }
-  }
-  private _getTreeMemory(treeScope: string) {
-    if (this._memory.tree[treeScope] == undefined) {
-      this._memory.tree[treeScope] = {}
-    }
-    return this._memory.tree[treeScope]
-  }
-  private _getNodeMemory(mem: any, nodeScope: string) {
-    if (mem[nodeScope] == undefined) {
-      mem[nodeScope] = {}
-    }
-    return mem[nodeScope]
-  }
-  private _getMemory(treeScope: string, nodeScope: string) {
-    if (treeScope) {
-      var memory = this._getTreeMemory(treeScope)
-
-      if (nodeScope) {
-        return this._getNodeMemory(memory, nodeScope)
+    tick(tick: b3.Tick) {
+      let creep = tick.target as Creep
+      if (creep.carry[this.resource] > 0) {
+        return STATUS.SUCCESS
       }
 
-      return memory
+      return STATUS.FAILURE
+    }
+  }
+  // end CarriesResource
+
+
+  // FindConstruction
+  export class FindConstruction extends Action {
+    name: string = 'FindConstruction'
+
+    open(tick: b3.Tick) {
+      let creep = tick.target as Creep
+      delete creep.memory.target
     }
 
-    return this._memory.base
+    tick(tick: b3.Tick) {
+      let creep = tick.target as Creep
+
+      if (creep.carry.energy == 0) { return STATUS.FAILURE }
+
+      let o = creep.pos.findClosestByRange(FIND_CONSTRUCTION_SITES) as ConstructionSite
+      if (o) {
+        creep.memory.target = o.id
+        creep.memory.actionRange = 3
+        return STATUS.SUCCESS
+      }
+
+      return STATUS.FAILURE
+    }
   }
-  public set(key: string, value: string, treeScope: any, nodeScope: any): void {
-    this._getMemory(treeScope ? treeScope.toString() : undefined, nodeScope ? nodeScope.toString() : undefined)[key] = value
+  // end FindConstruction
+
+
+  // BuildConstruction
+  export class BuildConstruction extends Action {
+    name: string = 'BuildConstruction'
+
+    tick(tick: b3.Tick) {
+      let creep = tick.target as Creep
+      if (creep.carry.energy == 0) { return STATUS.SUCCESS }
+
+      let target = creep.getTarget() as ConstructionSite
+      if (target) {
+        if (creep.build(target) != OK) {
+          return STATUS.FAILURE
+        }
+
+        return STATUS.RUNNING
+      }
+
+      // We asume the construction is finished
+      return STATUS.SUCCESS
+    }
   }
-  public get(key: string, treeScope: any, nodeScope: any): any {
-    return this._getMemory(treeScope ? treeScope.toString() : undefined, nodeScope ? nodeScope.toString() : undefined)[key]
+  // end BuildConstruction
+
+
+  // RunTree
+  export class RunTree extends Action {
+    name: string = 'RunTree'
+
+    tree: string
+
+    constructor(props: b3.Properties, id: string) {
+      super(props, id)
+
+      this.tree = props['tree'] as string
+    }
+
+    tick(tick: b3.Tick) {
+      let tree = tick.tree.knownTrees[this.tree] as b3.BehaviorTree
+      if (tree) {
+        return tree.tick(tick.target, tick.blackboard)
+      } else {
+        return STATUS.ERROR
+      }
+    }
   }
+  // end RunTree
 }
 
 export function loadTree(data: any, names: any = {}) {

@@ -3,7 +3,7 @@ import { Composite } from '../core/Types'
 import { STATUS } from '../helper'
 
 export class Sequence extends Composite {
-  name: 'Sequence'
+  name: string = 'Sequence'
 
   tick(tick: Tick) {
 

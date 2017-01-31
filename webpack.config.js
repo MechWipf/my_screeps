@@ -12,7 +12,8 @@ module.exports = {
   externals: [
     { "map": "map" },
     { "allrounder": "allrounder" },
-    { "harvester-energy": "harvester-energy" }
+    { "harvester-energy": "harvester-energy" },
+    { "move": "move" }
   ],
 
   target: "node",

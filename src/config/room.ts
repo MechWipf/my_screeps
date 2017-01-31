@@ -51,7 +51,7 @@ export let level: RoomLevelConfig = [
     name: 'Feudal',
     maxSlaves: 0,
     availableCreeps: {
-      'allrounder': 2,
+      'allrounder': 1.5,
       'harvester-energy': true, // miners are defined by the amount of sources in the room and slaves of the room
     },
     require: {

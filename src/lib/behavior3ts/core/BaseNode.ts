@@ -22,7 +22,13 @@ export class BaseNode {
       this._open(tick)
     }
 
-    let status = this._tick(tick)
+    let status
+    try {
+      status = this._tick(tick)
+    } catch (err) {
+      status = STATUS.ERROR
+      tick.tree.error = 'Error in ' + this.name + ' ' + err
+    }
 
     if (status !== STATUS.RUNNING) {
       this._close(tick)
@@ -30,6 +36,10 @@ export class BaseNode {
     }
 
     this._exit(tick)
+
+    if (tick.debug) {
+      tick.debug.push([this.id, this.name, STATUS[status]].join(' '))
+    }
 
     return status
   }
@@ -51,6 +61,7 @@ export class BaseNode {
   _close(tick: Tick) {
     tick.closeNode()
     if (this.close) { this.close(tick) }
+    tick.blackboard.clear(tick.tree.id, this.id)
   }
 
   protected _exit(tick: Tick) {

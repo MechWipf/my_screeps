@@ -21,6 +21,7 @@ export interface Properties { [k: string]: string | number }
 export interface Blackboard {
   get(key: string, treeScope?: string, nodeScope?: string): any
   set(key: string, value: string | number | string[] | number[], treeScope?: string, nodeScope?: string): any
+  clear(treeScope: string, nodeScope: string): any
 }
 
 export const VERSION: string = '0.1.0'
